@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+option java_package = "com.example.all";
+option java_multiple_files = true;
+
+// Phase 1 精简版用户偏好：
+// 仅存储震动开关、NFC 灵敏度、本地调试密钥
+// Phase 2 将新增 Token 加密字段，移除 local_device_key_hex
+message UserPrefs {
+  // 震动反馈开关，默认 true（开锁/关锁成功时震动提示）
+  bool   vibration_enabled    = 1;
+
+  // NFC 灵敏度等级："High" / "Medium" / "Low"，默认 "Medium"
+  string nfc_sensitivity      = 2;
+
+  // Phase 1 调试密钥（十六进制字符串，如 "0123456789abcdef0123456789abcdef"）
+  // ⚠️ 仅用于硬件调试！Phase 2 删除此字段，密钥改由云端管理
+  string local_device_key_hex = 3;
+
+  // ===== Phase 2 新增字段（当前保留编号，暂不使用）=====
+  // bytes  encrypted_access_token  = 4;
+  // bytes  encrypted_refresh_token = 5;
+  // bytes  token_iv                = 6;
+  // string last_logged_in_user_id  = 7;
+  // bool   online_mode_enabled     = 8;
+}

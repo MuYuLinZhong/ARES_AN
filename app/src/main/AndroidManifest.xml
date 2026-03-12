@@ -2,24 +2,50 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 网络权限（Phase 2 使用） -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- NFC 权限 -->
+    <uses-permission android:name="android.permission.NFC" />
+
+    <!-- 声明设备必须支持 NFC（Google Play 过滤不兼容设备） -->
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="true" />
 
     <application
-        android:allowBackup="true"
+        android:name=".AresApplication"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ALL">
+        android:theme="@style/Theme.ALL"
+        tools:targetApi="31">
+
+        <!-- 启动页：NFC 检测 → 路由到首页 -->
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.SplashActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+
+        <!-- 主页：WebView 壳 + NFC ForegroundDispatch -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="false"
+            android:launchMode="singleTop">
+            <!-- NFC Tech Filter：接收 IsoDep 类型的 NFC Tag -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/nfc_tech_filter" />
         </activity>
     </application>
 

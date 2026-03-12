@@ -1,6 +1,7 @@
 package com.example.all.presentation.splash
 
 import android.nfc.NfcAdapter
+import com.example.all.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,12 +42,17 @@ class SplashViewModel @Inject constructor(
      * NFC 检测与路由决策
      *
      * 判断顺序：
-     * 1. nfcAdapter == null → 设备无 NFC 芯片 → 弹窗退出
+     * 1. nfcAdapter == null：
+     *    - debug 构建：允许无 NFC 设备进入首页（便于模拟器联调）
+     *    - release 构建：设备无 NFC 芯片 → 弹窗退出
      * 2. !nfcAdapter.isEnabled → NFC 未开启 → 引导去设置
      * 3. NFC 可用 → Phase 1 直接进首页
      */
     private fun checkNfcAndRoute() {
         when {
+            BuildConfig.DEBUG && nfcAdapter == null -> {
+                _uiState.value = StartupUiState.GoToHome
+            }
             nfcAdapter == null -> {
                 _uiState.value = StartupUiState.NfcNotAvailable
             }

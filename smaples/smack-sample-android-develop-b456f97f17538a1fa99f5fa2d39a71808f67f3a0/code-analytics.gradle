@@ -1,0 +1,94 @@
+apply plugin: "jacoco"
+apply plugin: "org.sonarqube"
+
+jacoco {
+    toolVersion = "0.8.8"
+}
+
+def coverageExclusion = [
+        // Default Excludes:
+        '**/R.class',
+        '**/R$*.class',
+        '**/BuildConfig.class',
+        '**/Manifest.class',
+        '**/Manifest$*.class',
+        '**/*$InjectAdapter.class',
+        '**/*$ModuleAdapter.class',
+        '**/*$ViewInjector*.class',
+        '**/*_MembersInjector.class',
+        '**/Dagger*Component.class',
+        '**/Dagger*Component$Builder.class',
+        '**/*Module_*Factory.class',
+        '**/*$ViewInjector*.*',
+        '**/*$ViewBinder*.*',
+        '**/*Module.*',
+        '**/SampleApplication.*',
+        '**/smack/sample/**/*.*',
+]
+
+def codeExclusion = [
+        '**/databinding/**/*.*',
+        '**/android/databinding/*Binding.*',
+        '**/BR.*',
+        '**/R.*',
+        '**/R$*.*',
+        '**/BuildConfig.*',
+        '**/Manifest*.*',
+        '**/mockserver/**'
+]
+
+sonarqube {
+    properties {
+        property "sonar.host.url", "https://www.x-root.info/sonarqube"
+        property "sonar.login", "61e3312c5ca0524bd0fb17f10b76fa9416fbd406"
+        property "sonar.projectKey", "infineon_smack-sample-android_AYODIJQQCbpRhY0OkBHa"
+        property "sonar.projectName", "smack-sample-android"
+        property "sonar.tags", "android"
+        property "sonar.sourceEncoding", "UTF-8"
+        property "sonar.sources", "src/main/java/com/infineon"
+        property "sonar.tests", "src/test,src/androidTest"
+        property "sonar.java.coveragePlugin", "jacoco"
+        property "sonar.coverage.exclusions", coverageExclusion.join(",")
+        property "sonar.exclusions", codeExclusion.join(",")
+        property "sonar.qualitygate.wait", true
+        property "sonar.coverage.jacoco.xmlReportPaths", "${project.buildDir}/reports/jacoco/rootCodeCoverageReport/rootCodeCoverageReport.xml"
+        property "sonar.androidLint.reportPaths", "${project.projectDir}/app/build/reports/lint-results-betaDebug.xml"
+        property "sonar.kotlin.detekt.reportPaths", "${project.projectDir}/app/build/reports/detekt/betaDebug.xml"
+        property "sonar.kotlin.ktlint.reportPaths", "${project.projectDir}/app/build/reports/ktlint/**/*.txt"
+
+        property "sonar.junit.reportPaths", fileTree(dir: project.projectDir, includes: ["**/TEST-*-Test.xml"]).join(",")
+    }
+}
+
+def coverageMainSourceDirs = ['app/src/main']
+
+def coverageKotlinClassDirectories = [
+        fileTree(dir: 'app/build/tmp/kotlin-classes/betaDebug',
+                excludes: coverageExclusion),
+]
+
+def coverageClassDirectories = [
+        fileTree(dir: 'app/build/intermediates/classes/betaDebug',
+                excludes: coverageExclusion),
+]
+
+task rootCodeCoverageReport(
+        type: JacocoReport,
+        dependsOn: [
+                "app:createBetaDebugAndroidTestCoverageReport",
+                "app:testBetaDebugUnitTest",
+        ]
+) {
+    group = "Reporting"
+    description = "Generate Jacoco coverage reports after running tests."
+    reports {
+        xml.required = true
+        html.required = true
+    }
+    sourceDirectories.from = files(coverageMainSourceDirs)
+    classDirectories.from = files(coverageClassDirectories, coverageKotlinClassDirectories).collect{
+        fileTree(dir:it, exclude: coverageExclusion)
+    }
+    executionData.from = fileTree(dir: project.projectDir, includes: ["**/*.exec", "**/*.ec"])
+    outputs.upToDateWhen { false }
+}

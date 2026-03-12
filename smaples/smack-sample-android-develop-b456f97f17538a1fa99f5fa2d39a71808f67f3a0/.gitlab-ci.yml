@@ -1,0 +1,259 @@
+variables:
+  DOCKER_DRIVER: overlay2
+  MAVEN_REPO: /cache/.m2
+  GRADLE_USER_HOME: /cache/.gradle
+
+  BUILD_VARIANT_BETA: "Beta"
+  BUILD_VARIANT_PRODUCTION: "Production"
+  RUN_SONAR: "true"
+
+  APPCENTER_OWNER: "Infineon"
+  APPCENTER_PROJECT_BETA_INTERNAL: "Smack-Sample-Android-Beta-Internal"
+  APPCENTER_PROJECT_BETA_EXTERNAL: "Smack-Sample-Android-Beta-External"
+  APPCENTER_PROJECT_PRODUCTION: "Smack-Sample-Android-Production"
+  APPCENTER_TESTERS_GROUP: "external-testers"
+
+stages:
+  - test
+  - build
+  - sonar
+  - deploy
+  - publish
+
+.buildTemplate:
+  stage: build
+  image: gitlab.x-root.net:4567/docker/android-docker-image:latest
+  tags:
+    - Android
+  before_script:
+    - echo "Running Job $CI_JOB_NAME. CI_PIPELINE_ID is ${CI_PIPELINE_ID}"
+  artifacts:
+    when: always
+    expose_as: 'APKs'
+    paths:
+      - app/build/outputs/
+  interruptible: true
+  allow_failure: false
+  dependencies: [ ]
+
+buildBeta:
+  extends: .buildTemplate
+  script: gradle clean assembleBetaRelease --build-cache --stacktrace
+  only:
+    - develop
+    - master
+  dependencies: [ ]
+  artifacts:
+    expire_in: 1 month
+
+buildProduction:
+  extends: .buildTemplate
+  script: gradle clean assembleProductionRelease --build-cache --stacktrace
+  only:
+    - master
+  dependencies: [ ]
+  artifacts:
+    expire_in: 3 years
+
+tests:
+  stage: test
+  image: gitlab.x-root.net:4567/docker/android-docker-image:latest
+  before_script:
+    - echo "Running Job $CI_JOB_NAME. CI_PIPELINE_ID is ${CI_PIPELINE_ID}"
+    - time start-emulator.sh
+  script:
+    - gradle clean app:testBetaDebugUnitTest --rerun-tasks --no-build-cache --parallel
+    - gradle clean rootCodeCoverageReport --stacktrace --build-cache
+  after_script:
+    - cat build/reports/jacoco/rootCodeCoverageReport/html/index.html
+  coverage: '/Total.*?([0-9]{1,3})%/'
+  tags:
+    - Android
+  artifacts:
+    when: always
+    paths:
+      - "**/TEST-*.xml"
+      - build/reports/
+    reports:
+      junit:
+        - "**/TEST-*.xml"
+    expire_in: 1 week
+  interruptible: true
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "develop" ||  $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature/'
+
+androidLint:
+  stage: test
+  image: gitlab.x-root.net:4567/docker/android-docker-image:latest
+  before_script:
+    - echo "Running Job $CI_JOB_NAME. CI_PIPELINE_ID is ${CI_PIPELINE_ID}"
+  script: gradle clean app:lintBetaDebug --stacktrace --build-cache
+  tags:
+    - Android
+  artifacts:
+    when: always
+    paths:
+      - "**/lint-results-*.xml"
+    expire_in: 1 week
+  interruptible: true
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "develop" ||  $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature/'
+
+detekt:
+  stage: test
+  image: gitlab.x-root.net:4567/docker/android-docker-image:latest
+  before_script:
+    - echo "Running Job $CI_JOB_NAME. CI_PIPELINE_ID is ${CI_PIPELINE_ID}"
+  script: gradle clean app:detektBetaDebug --stacktrace --build-cache
+  tags:
+    - Android
+  artifacts:
+    when: always
+    paths:
+      - "**/detekt/*.xml"
+    expire_in: 1 week
+  interruptible: true
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "develop" ||  $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature/'
+
+sonar:
+  stage: sonar
+  image: gitlab.x-root.net:4567/docker/android-docker-image:latest
+  tags:
+    - Android
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  script: gradle sonarqube --info --stacktrace --build-cache -Dsonar.userHome=`pwd`/.sonar
+  retry: 2 #(Maximum is 2 retries. See https://docs.gitlab.com/ee/ci/yaml/#retry)
+  interruptible: true
+  allow_failure: false
+  cache:
+    key: sonar-key
+    paths:
+      - .sonar
+      - .scannerwork
+  needs:
+    - detekt
+    - androidLint
+    - tests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "develop" ||  $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature/'
+
+
+.deployAppCenterTemplate:
+  variables:
+    FLAVOR: ""
+    APP_CENTER_PROJECT: ""
+    TESTERS: "beta-testers"
+  stage: deploy
+  image: gitlab.x-root.net:4567/docker/appcenter-docker-image:latest
+  tags:
+    - Android
+  before_script:
+    - echo "Running Job ${CI_JOB_NAME}. CI_PIPELINE_ID is ${CI_PIPELINE_ID}"
+    - echo "FLAVOR is $FLAVOR and APP_CENTER_PROJECT is $APP_CENTER_PROJECT and TESTERS is $TESTERS"
+    - PROJECT_VERSION_NAME=$(grep "projectVersion" gradle.properties | cut -d '=' -f2)
+    - PROJECT_VERSION=$PROJECT_VERSION_NAME-$CI_PIPELINE_ID
+  script:
+    - FL=$(echo $FLAVOR | tr '[:upper:]' '[:lower:]')
+    - echo "I converted $FLAVOR to lower case $FL"
+    - echo "I parsed version PROJECT_VERSION_NAME from gradle.properties. It will be used to upload the mapping.txt to AppCenter. Failing mapping.txt Uploads do not fail the job!"
+    - cp app/build/outputs/apk/${FL}/release/app-${FL}-release.apk smack-sample-android-${PROJECT_VERSION}.apk
+    - 'appcenter distribute release -f "smack-sample-android-${PROJECT_VERSION}.apk" -g ${TESTERS} --token ${APPCENTER_LOGIN_TOKEN} --app ${APPCENTER_OWNER}/${APP_CENTER_PROJECT} --debug'
+    - 'appcenter crashes upload-mappings --mapping app/build/outputs/mapping/${FL}Release/mapping.txt --version-code ${CI_PIPELINE_ID} --version-name ${PROJECT_VERSION_NAME} --token ${APPCENTER_LOGIN_TOKEN} --app ${APPCENTER_OWNER}/${APP_CENTER_PROJECT} --debug || true'
+  artifacts:
+    paths:
+      - smack-sample-android-*.apk
+
+deployAppCenterInternal:
+  extends: .deployAppCenterTemplate
+  variables:
+    FLAVOR: ${BUILD_VARIANT_BETA}
+    APP_CENTER_PROJECT: ${APPCENTER_PROJECT_BETA_INTERNAL}
+  dependencies:
+    - buildBeta
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop" && $APPCENTER_PROJECT_BETA_INTERNAL != ""'
+
+deployAppCenterExternalBeta:
+  extends: .deployAppCenterTemplate
+  variables:
+    FLAVOR: ${BUILD_VARIANT_BETA}
+    APP_CENTER_PROJECT: ${APPCENTER_PROJECT_BETA_EXTERNAL}
+  dependencies:
+    - buildBeta
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" && $APPCENTER_PROJECT_BETA_EXTERNAL != ""'
+
+deployAppCenterExternalProduction:
+  extends: .deployAppCenterTemplate
+  variables:
+    FLAVOR: ${BUILD_VARIANT_PRODUCTION}
+    APP_CENTER_PROJECT: ${APPCENTER_PROJECT_PRODUCTION}
+    TESTERS: ${APPCENTER_TESTERS_GROUP}
+  dependencies:
+    - buildProduction
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" && $APPCENTER_PROJECT_PRODUCTION != ""'
+
+.publishTemplate:
+  variables:
+    CONFLUENCE_BASE_URL: https://www.x-root.info/confluence
+    ATTACHMENT_TYPE: file
+    PAGE_ID: 129763706
+  stage: publish
+  image: gitlab.x-root.net:4567/docker/android-docker-image:latest
+  tags:
+    - Docker
+  before_script:
+    - echo "Running Job $CI_JOB_NAME. CI_PIPELINE_ID is ${CI_PIPELINE_ID}"
+    - PROJECT_VERSION_NAME=$(grep "projectVersion" gradle.properties | cut -d '=' -f2)
+    - PROJECT_VERSION=$PROJECT_VERSION_NAME-$CI_PIPELINE_ID
+  interruptible: true
+  allow_failure: false
+  dependencies: [ buildProduction ]
+  needs: [ buildProduction ]
+  only:
+    - master
+
+createReadmePdf:
+  extends: .publishTemplate
+  image:
+    name: pandoc/latex
+    entrypoint: [ "/bin/sh", "-c" ]
+  script:
+    - pandoc --output=smack-sample-android-readme-$PROJECT_VERSION.pdf README.md -f markdown-implicit_figures --toc
+  artifacts:
+    paths:
+      - smack-sample-android-readme-*.pdf
+
+publishReadmePdfToConfluence:
+  extends: .publishTemplate
+  script:
+    - FILE_PATH="smack-sample-android-readme-$PROJECT_VERSION.pdf"
+    - echo "Uploading $FILE_PATH..."
+    - 'curl -u $CONFLUENCE_USER:$CONFLUENCE_PASSWORD -X POST -H "X-Atlassian-Token: nocheck" -F "file=@${FILE_PATH}" ${CONFLUENCE_BASE_URL}/rest/api/content/${PAGE_ID}/child/attachment'
+  dependencies: [ createReadmePdf ]
+  needs: [ createReadmePdf ]
+
+publishApkToConfluence:
+  extends: .publishTemplate
+  script:
+    - FILE_PATH="smack-sample-android-$PROJECT_VERSION.apk"
+    - echo "Uploading $FILE_PATH..."
+    - 'curl -u $CONFLUENCE_USER:$CONFLUENCE_PASSWORD -X POST -H "X-Atlassian-Token: nocheck" -F "file=@${FILE_PATH}" ${CONFLUENCE_BASE_URL}/rest/api/content/${PAGE_ID}/child/attachment'
+  dependencies: [ deployAppCenterExternalProduction ]
+  needs: [ deployAppCenterExternalProduction ]
+
+publishSourcesToConfluence:
+  extends: .publishTemplate
+  script:
+    - echo "Downloading Source Code Zip..."
+    - 'curl --header "Authorization: Bearer $GROUP_ACCESS_TOKEN" "https://gitlab.x-root.info/api/v4/projects/$CI_PROJECT_ID/repository/archive.zip" --output archive.zip'
+    - mv archive.zip smack-sample-android-$PROJECT_VERSION-source-code.zip
+    - echo "Uploading Source Code Zip..."
+    - 'curl -u $CONFLUENCE_USER:$CONFLUENCE_PASSWORD -X POST -H "X-Atlassian-Token: nocheck" -F "file=@smack-sample-android-$PROJECT_VERSION-source-code.zip" ${CONFLUENCE_BASE_URL}/rest/api/content/${PAGE_ID}/child/attachment'

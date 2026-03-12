@@ -1,0 +1,17 @@
+android {
+    signingConfigs {
+        production {
+            keyAlias 'smack-sample'
+            keyPassword 'q7dgF5fZe55uMg2u'
+            storeFile file('../smack-sample.jks')
+            storePassword 'q7dgF5fZe55uMg2u'
+        }
+
+        ci {
+            keyAlias 'ci-key-alias'
+            keyPassword '1mxxfzERv9Vztuka'
+            storeFile file('../ci-key.keystore.jks')
+            storePassword '1mxxfzERv9Vztuka'
+        }
+    }
+}

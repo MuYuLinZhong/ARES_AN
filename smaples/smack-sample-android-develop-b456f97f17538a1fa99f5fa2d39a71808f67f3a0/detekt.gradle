@@ -1,0 +1,16 @@
+detekt {
+    buildUponDefaultConfig = true // preconfigure defaults
+    allRules = false // activate all available (even unstable) rules.
+    config = files("${rootProject.projectDir}/config/detekt.yml")
+    ignoreFailures = System?.env?.CI ?: false
+    reports {
+        html.enabled = false
+        xml.enabled = true
+        txt.enabled = false
+        sarif.enabled = false
+    }
+}
+
+dependencies {
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.21.0")
+}

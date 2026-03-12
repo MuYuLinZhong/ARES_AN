@@ -1,0 +1,21 @@
+dependencies {
+    // Do not change the following line!
+    // The latest version will be updated by a CI-Job of the SDK Project
+    // https://gitlab.x-root.info/infineon/smack-sdk-android
+    implementation(name: 'smack-sdk-latest', ext: 'aar')
+
+    implementation("com.google.dagger:hilt-android:2.43.2")
+    kapt("com.google.dagger:hilt-android-compiler:2.43.2")
+
+    implementation 'androidx.core:core-ktx:1.9.0'
+    implementation 'androidx.appcompat:appcompat:1.5.1'
+    implementation 'com.google.android.material:material:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation "androidx.fragment:fragment-ktx:1.5.3"
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.5.1"
+    implementation "androidx.lifecycle:lifecycle-common-java8:2.5.1"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1"
+    implementation "com.jakewharton.threetenabp:threetenabp:1.3.1"
+    implementation "com.mikepenz:aboutlibraries:10.3.1"
+}

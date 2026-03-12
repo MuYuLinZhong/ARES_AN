@@ -1,0 +1,23 @@
+# Defaults
+.gradle
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+ 
+# Android Studio
+.idea/*
+!/.idea/codeStyles/*
+!.idea/codeStyles/codeStyleConfig.xml
+!.idea/codeStyles/Project.xml
+!.idea/inspectionProfiles/*
+!.idea/inspectionProfiles/ktlint.xml
+!.idea/inspectionProfiles/profiles_settings.xml
+*.iml
+ 
+# Dictionary
+!.idea/dictionaries/technical.xml
+!.idea/dictionaries/english.xml
+!.idea/dictionaries/german.xml

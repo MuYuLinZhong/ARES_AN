@@ -1,0 +1,31 @@
+<resources>
+    <!-- Base application theme. -->
+    <style name="Theme.SmackSDK" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/purple_500</item>
+        <item name="colorSecondaryVariant">@color/purple_700</item>
+        <item name="colorOnSecondary">@color/black</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <!-- Customize your theme here. -->
+    </style>
+
+    <style name="CardTitle" parent="TextAppearance.AppCompat.Title">
+        <item name="android:textColor">@color/primary_blue</item>
+        <item name="android:textSize">@dimen/common_text_size_card_title</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="CardLabel" parent="TextAppearance.AppCompat.Body1">
+        <item name="android:textColor">@color/black</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Container" parent="Theme.AppCompat.DayNight">
+        <item name="android:background">@color/light_grey</item>
+    </style>
+</resources>

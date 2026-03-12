@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">NAC1080 POC</string>
+    <string name="app_title">NAC1080 Sample</string>
+    <string name="connection">Connection</string>
+    <string name="nfc_connected">NFC connected</string>
+    <string name="nfc_disconnected">NFC not connected</string>
+    <string name="use_nvm_firmware">Use NVM Firmware</string>
+    <string name="byte_count_information">Byte count information</string>
+    <string name="sent">Sent</string>
+    <string name="received">Received</string>
+    <string name="divergent">Divergent</string>
+    <string name="reset_bytes">Reset bytes</string>
+    <string name="error_title_try_again">Please try again</string>
+    <string name="error_message_try_again">An unexpected error occurred.</string>
+    <string name="error_title_invalid_key">Invalid Key</string>
+    <string name="error_message_invalid_key">The key was invalid.</string>
+    <string name="error_message_no_nvm_firmware">NVM library could be not available. Please program IC with a firmware generated with the Infineon firmware SDK.</string>
+    <string name="ok">OK</string>
+</resources>

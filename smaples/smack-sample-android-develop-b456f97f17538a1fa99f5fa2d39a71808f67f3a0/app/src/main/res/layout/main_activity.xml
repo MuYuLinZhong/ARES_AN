@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="@style/Container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".overview.MainActivity">
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/common_margin_medium"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:showIn="@layout/main_activity">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/common_margin_medium">
+
+            <TextView
+                android:id="@+id/connectionHeadline"
+                style="@style/CardTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/connection"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageView
+                android:id="@+id/connectedImageView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:background="@drawable/connected_circle"
+                android:contentDescription="@null"
+                android:padding="8dp"
+                android:src="@drawable/connected"
+                android:visibility="invisible"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/connectionHeadline"
+                tools:layout_constraintBottom_toBottomOf=""
+                tools:visibility="visible" />
+
+            <ImageView
+                android:id="@+id/disconnectedImageView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:background="@drawable/disconnected_circle"
+                android:contentDescription="@null"
+                android:padding="8dp"
+                android:src="@drawable/disconnected"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/connectionHeadline"
+                tools:layout_constraintTop_toBottomOf="@id/connectedImageView" />
+
+            <TextView
+                android:id="@+id/connectedTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/common_margin_medium"
+                android:text="@string/nfc_connected"
+                android:visibility="gone"
+                app:layout_constraintBottom_toBottomOf="@id/connectedImageView"
+                app:layout_constraintStart_toEndOf="@id/connectedImageView"
+                app:layout_constraintTop_toTopOf="@id/connectedImageView"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/disconnectedTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/common_margin_medium"
+                android:text="@string/nfc_disconnected"
+                app:layout_constraintBottom_toBottomOf="@id/disconnectedImageView"
+                app:layout_constraintStart_toEndOf="@id/disconnectedImageView"
+                app:layout_constraintTop_toTopOf="@id/disconnectedImageView" />
+
+            <androidx.constraintlayout.widget.Barrier
+                android:id="@+id/connectionStatusBarrier"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                app:barrierDirection="bottom"
+                app:constraint_referenced_ids="connectedImageView, disconnectedImageView" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/firmwareSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="0dp"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:text="@string/use_nvm_firmware"
+                app:layout_constraintTop_toBottomOf="@id/connectionStatusBarrier" />
+
+            <TextView
+                android:id="@+id/firmwareText"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:text="@string/error_message_no_nvm_firmware"
+                android:textColor="@color/disconnected_red"
+                android:visibility="gone"
+                app:layout_constraintTop_toBottomOf="@id/firmwareSwitch"
+                tools:visibility="visible" />
+
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/common_margin_medium"
+        android:layout_marginEnd="@dimen/common_margin_medium">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/common_margin_medium">
+
+            <TextView
+                android:id="@+id/dataHeadline"
+                style="@style/CardTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/byte_count_information"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/sentTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:text="@string/sent"
+                app:layout_constraintStart_toStartOf="@id/dataHeadline"
+                app:layout_constraintTop_toBottomOf="@id/dataHeadline" />
+
+            <TextView
+                android:id="@+id/sentValueTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                app:layout_constraintBottom_toBottomOf="@id/sentTextView"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="@id/sentTextView"
+                tools:ignore="HardcodedText" />
+
+            <TextView
+                android:id="@+id/receivedTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:text="@string/received"
+                app:layout_constraintStart_toStartOf="@id/dataHeadline"
+                app:layout_constraintTop_toBottomOf="@id/sentTextView" />
+
+            <TextView
+                android:id="@+id/receivedValueTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                app:layout_constraintBottom_toBottomOf="@id/receivedTextView"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="@id/receivedTextView"
+                tools:ignore="HardcodedText" />
+
+            <TextView
+                android:id="@+id/divergentTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:text="@string/divergent"
+                app:layout_constraintStart_toStartOf="@id/dataHeadline"
+                app:layout_constraintTop_toBottomOf="@id/receivedTextView" />
+
+            <TextView
+                android:id="@+id/divergentValueTextView"
+                style="@style/CardLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                app:layout_constraintBottom_toBottomOf="@id/divergentTextView"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="@id/divergentTextView"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/resetButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/common_margin_medium"
+                android:text="@string/reset_bytes"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/divergentTextView" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.cardview.widget.CardView>
+
+</LinearLayout>

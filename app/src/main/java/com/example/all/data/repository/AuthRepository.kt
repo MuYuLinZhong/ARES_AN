@@ -7,7 +7,7 @@ import com.example.all.domain.model.User
  * 认证仓库接口 —— 封装登录/登出/Token 刷新等认证操作
  *
  * Phase 1 实现：FakeAuthRepository（返回固定值，不发网络请求）
- * Phase 2 实现：RemoteAuthRepository（调用云端 /auth/* API）
+ * Phase 2 实现：RemoteAuthRepository（调用云端 auth 相关 API）
  */
 interface AuthRepository {
 

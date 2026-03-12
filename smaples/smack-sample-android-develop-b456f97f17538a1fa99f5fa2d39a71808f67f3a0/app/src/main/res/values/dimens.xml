@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="common_margin_medium" type="dimen">16dp</item>
+    <item name="common_text_size_card_title" type="dimen">16sp</item>
+</resources>

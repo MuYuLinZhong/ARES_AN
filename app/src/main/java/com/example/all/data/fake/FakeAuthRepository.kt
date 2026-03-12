@@ -12,7 +12,7 @@ import javax.inject.Inject
  * Phase 1 整个认证模块不参与（无登录页、无 Token），
  * 此类仅提供编译所需的接口实现和调试用的固定返回值。
  *
- * Phase 2 由 Hilt DI 替换为 RemoteAuthRepository（调用云端 /auth/* API）。
+ * Phase 2 由 Hilt DI 替换为 RemoteAuthRepository（调用云端 auth 相关 API）。
  */
 class FakeAuthRepository @Inject constructor() : AuthRepository {
 

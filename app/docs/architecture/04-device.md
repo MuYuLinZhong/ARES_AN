@@ -1,233 +1,266 @@
 # 04 · 设备管理模块：列表 · 搜索 · 添加绑定 · 详情
 
 > **模块边界**：设备列表展示、搜索过滤、新设备 NFC 绑定、设备详情查看与删除。  
-> **依赖模块**：`08-storage`（Room 缓存）、`09-network`（DeviceRepository 远端请求）、`03-nfc-core`（NFC 扫描绑定）  
-> **被依赖**：`05-permission`（设备详情中的授权管理）、`07-webview-bridge`（事件调用）
+> **依赖模块**：`08-storage`（Room 缓存）、`09-network`（Phase 2+ 远端请求）、`03-nfc-core`（NFC 扫描绑定）  
+> **被依赖**：`05-permission`（设备详情授权管理，Phase 2+）、`07-webview-bridge`
 
 ---
 
-## 1. 模块职责
+## Phase 1：本地设备管理（Room 直接读写，无云端）
+
+### 职责范围
 
 | 职责 | 说明 |
 | :--- | :--- |
-| 设备列表展示 | 展示当前账号下所有绑定设备，支持离线缓存展示 |
-| 搜索过滤 | 按设备昵称关键词实时过滤（纯本地逻辑，不调接口） |
-| 快捷开锁 | 设备列表卡片直接触发开锁（通知 HomeViewModel） |
-| 新设备绑定 | 输入昵称 → NFC 扫描读取设备 ID → 上传云端建立关联 |
-| 设备详情 | 展示设备基本信息 + 授权用户列表 |
-| 解绑设备 | Owner 删除 User-Device 绑定关系 |
-| 设备有效性标记 | `isValid=false` 的设备在列表中灰色置灰展示，禁用操作 |
+| 设备列表展示 | 从 Room `device_cache` 读取，支持离线展示 |
+| 搜索过滤 | 本地按昵称关键词过滤 |
+| 添加设备 | NFC 读取 deviceId → 直接写入 Room，不调云端 |
+| 设备详情 | 展示基本信息（无授权管理） |
+| 解绑设备 | 从 Room 删除记录 |
+| **跳过** | 云端同步、授权用户列表、设备有效性时效校验 |
 
----
+### 业务流程图
 
-## 2. 数据模型
+```mermaid
+flowchart TD
+    A[进入设备列表页] --> B[DeviceListViewModel.loadDevices]
+    B --> C[读取 Room device_cache]
+    C --> D[展示设备列表]
 
-### Device（`domain/model/Device.kt`）
-| 字段 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `deviceId` | String | 硬件唯一 ID（NFC 读取） |
-| `serialNo` | String | 设备序列号（展示用） |
-| `nickname` | String | 用户自定义昵称 |
-| `isValid` | Boolean | 账号对此设备是否仍有权限 |
-| `lastSyncAt` | Long | 最后一次云端同步时间戳（毫秒） |
+    E[用户点击 + 添加设备] --> F[输入设备昵称]
+    F --> G[点击 Approach and Add]
+    G --> H[等待 NFC Tag 感应]
+    H --> I{NFC Tag 到达?}
+    I -- 否/超时 --> J[提示'未检测到设备']
+    I -- 是 --> K[NFC 读取 deviceId]
+    K --> L[写入 Room device_cache]
+    L --> M[Room Flow 触发列表刷新]
 
----
-
-## 3. ViewModel：DeviceListViewModel
-
-**文件**：`presentation/devices/DeviceListViewModel.kt`
-
-### UiState
-```
-data class DeviceListUiState(
-    val allDevices: List<Device> = emptyList(),   // Room 缓存的完整列表
-    val filteredDevices: List<Device> = emptyList(), // 搜索过滤后的列表（默认等于 allDevices）
-    val searchKeyword: String = "",
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val isOffline: Boolean = false               // 是否处于离线展示模式
-)
+    N[用户点击 Remove Device] --> O[删除 Room 记录]
+    O --> M
 ```
 
-### 方法
-| 方法 | 触发来源 | 职责 |
-| :--- | :--- | :--- |
-| `loadDevices()` | 页面进入 / 下拉刷新 | 先展示 Room 缓存，后台拉云端刷新 |
-| `onSearchKeywordChanged(keyword)` | AndroidBridge | 实时过滤 `allDevices`，更新 `filteredDevices` |
-| `onUnlockFromList(deviceId, deviceName)` | AndroidBridge 快捷开锁 | 设置 HomeViewModel 的当前设备，触发开锁流程 |
+### 实现规格
 
-### 核心逻辑：Cache-Then-Network
-```
-loadDevices() {
-  1. 立即从 Room 读取缓存 → 更新 allDevices（用户不等待白屏）
-  2. 后台发起网络请求
-  3a. 成功 → 更新 Room → 更新 allDevices（用户看到最新数据）
-  3b. 失败 → isOffline = true，保持缓存展示，UI 显示离线横幅
+#### DeviceListViewModel
+
+```kotlin
+@HiltViewModel
+class DeviceListViewModel @Inject constructor(
+    private val getDeviceListUseCase: GetDeviceListUseCase,
+    private val searchDevicesUseCase: SearchDevicesUseCase
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(DeviceListUiState())
+    val uiState: StateFlow<DeviceListUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            getDeviceListUseCase().collect { devices ->
+                _uiState.update { it.copy(
+                    allDevices = devices,
+                    filteredDevices = searchDevicesUseCase(devices, it.searchKeyword)
+                )}
+            }
+        }
+        loadDevices()
+    }
+
+    fun loadDevices() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            // Phase 1：只读 Room，不发网络请求
+            // Phase 2：TODO fetchAndCacheDevices() 从云端拉取
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    fun onSearchKeywordChanged(keyword: String) {
+        _uiState.update { state ->
+            state.copy(
+                searchKeyword   = keyword,
+                filteredDevices = searchDevicesUseCase(state.allDevices, keyword)
+            )
+        }
+    }
 }
 ```
 
----
+#### AddDeviceViewModel（Phase 1 版）
 
-## 4. ViewModel：AddDeviceViewModel
+```kotlin
+@HiltViewModel
+class AddDeviceViewModel @Inject constructor(
+    private val addDeviceUseCase: AddDeviceUseCase
+) : ViewModel() {
 
-**文件**：`presentation/adddevice/AddDeviceViewModel.kt`
+    private val _uiState = MutableStateFlow(AddDeviceUiState())
+    val uiState: StateFlow<AddDeviceUiState> = _uiState.asStateFlow()
 
-### UiState
-```
-data class AddDeviceUiState(
-    val nickname: String = "",
-    val nfcScanState: NfcScanState = NfcScanState.Idle,
-    val errorMessage: String? = null
-)
+    fun startNfcScan(nickname: String) {
+        if (nickname.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "请输入设备昵称") }
+            return
+        }
+        _uiState.update { it.copy(nfcScanState = NfcScanState.Scanning, errorMessage = null) }
+        // 等待 MainActivity 回调 onNfcTagDiscovered
+    }
 
-sealed class NfcScanState {
-    object Idle       : NfcScanState()    // 初始状态，等待用户点击"扫描"
-    object Scanning   : NfcScanState()    // 等待 NFC 感应中，显示引导动画
-    object Connecting : NfcScanState()    // 已感应到 Tag，建立连接中
-    data class Success(val deviceId: String) : NfcScanState()  // 绑定成功
-    data class Error(val message: String)   : NfcScanState()   // 失败，可重试
+    fun onNfcTagDiscovered(tag: Tag, nickname: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(nfcScanState = NfcScanState.Connecting) }
+            addDeviceUseCase(nickname, tag).fold(
+                onSuccess = { device ->
+                    _uiState.update { it.copy(nfcScanState = NfcScanState.Success(device.deviceId)) }
+                },
+                onFailure = { e ->
+                    _uiState.update { it.copy(nfcScanState = NfcScanState.Error(e.message ?: "添加失败")) }
+                }
+            )
+        }
+    }
 }
 ```
 
-### 方法
-| 方法 | 触发来源 | 职责 |
-| :--- | :--- | :--- |
-| `onNicknameChanged(text)` | AndroidBridge | 更新昵称输入 |
-| `startNfcScan(nickname)` | AndroidBridge | 校验昵称非空 → 切换到 Scanning 状态，等待 Tag |
-| `onNfcTagDiscovered(tag)` | MainActivity（NFC Tag 回调） | 调用 AddDeviceUseCase 执行绑定 |
-| `cancelScan()` | 用户取消 | 重置状态为 Idle |
+#### AddDeviceUseCase（Phase 1 本地版）
 
----
-
-## 5. ViewModel：DeviceDetailViewModel
-
-**文件**：`presentation/devicedetail/DeviceDetailViewModel.kt`
-
-### UiState
-```
-data class DeviceDetailUiState(
-    val device: Device? = null,
-    val authorizedUsers: List<AuthorizedUser> = emptyList(),
-    val isLoading: Boolean = false,
-    val revokeDialogTarget: AuthorizedUser? = null,  // 非 null 时显示撤销确认弹窗
-    val errorMessage: String? = null,
-    val inviteStatus: InviteStatus = InviteStatus.Idle
-)
-
-sealed class InviteStatus {
-    object Idle : InviteStatus()
-    object Sending : InviteStatus()
-    data class Success(val phone: String) : InviteStatus()
-    data class Error(val message: String) : InviteStatus()
+```kotlin
+class AddDeviceUseCase @Inject constructor(
+    private val nfcRepository: NfcRepository,
+    private val deviceRepository: DeviceRepository
+) {
+    suspend operator fun invoke(nickname: String, tag: Tag): Result<Device> {
+        return try {
+            val isoDep = nfcRepository.connect(tag)
+            val deviceId = nfcRepository.readDeviceId(isoDep)  // 发送"读取ID"专用指令
+            nfcRepository.disconnect(isoDep)
+            // Phase 1：直接写 Room
+            val device = deviceRepository.addDevice(deviceId, nickname)
+            // TODO Phase 2：同时调用 POST /devices/bind 向云端注册
+            Result.success(device)
+        } catch (e: IOException) {
+            Result.failure(Exception("NFC 读取失败，请重新靠近"))
+        }
+    }
 }
 ```
 
-### 方法
-| 方法 | 触发来源 | 职责 |
+### 验收要点
+
+- [ ] 设备列表能从 Room 读取并展示
+- [ ] 按昵称搜索过滤正常
+- [ ] NFC 靠近 → 读取 deviceId → 列表新增设备
+- [ ] 删除设备后列表实时更新
+- [ ] 设备列表为空时展示引导提示
+
+---
+
+## Phase 2：云端同步（Cache-Then-Network + 云端绑定）
+
+### 新增 / 变更说明
+
+| 变更项 | Phase 1 | Phase 2 |
 | :--- | :--- | :--- |
-| `loadDetail(deviceId)` | 页面进入 | GetDeviceDetailUseCase |
-| `onInviteClicked(deviceId, phone)` | AndroidBridge | InviteUserUseCase（见 05-permission.md） |
-| `onRevokeClicked(userId)` | AndroidBridge | 设置 `revokeDialogTarget`，显示确认弹窗 |
-| `confirmRevoke()` | AndroidBridge | RevokeUserAccessUseCase（见 05-permission.md） |
-| `dismissRevokeDialog()` | AndroidBridge | 清除 `revokeDialogTarget` |
-| `removeDevice(deviceId)` | AndroidBridge | RemoveDeviceUseCase |
+| 设备列表来源 | 仅 Room | Room 缓存先展示 + 后台拉云端更新 |
+| 添加设备 | 只写 Room | NFC 读取 deviceId + `POST /devices/bind` |
+| 设备详情 | 基本信息 | 基本信息 + 授权用户列表（来自云端/Room） |
+| 解绑设备 | 只删 Room | `DELETE /devices/{id}` + 删 Room |
+| 离线提示 | 无 | `isOffline=true` 横幅 |
+
+### Cache-Then-Network 数据流图
+
+```mermaid
+flowchart TD
+    A[进入设备列表] --> B[立即读 Room\n0等待展示缓存]
+    B --> C[后台发起 GET /devices]
+    C --> D{网络结果}
+    D -- 成功 --> E[upsertAll 写入 Room]
+    E --> F[Room Flow 自动推送\nUI 刷新为最新数据]
+    D -- 失败 --> G[isOffline=true\n顶部显示离线横幅\n保持缓存展示]
+```
+
+### NFC 添加设备时序图
+
+```mermaid
+sequenceDiagram
+    participant UI as WebView/UI
+    participant VM as AddDeviceViewModel
+    participant UC as AddDeviceUseCase
+    participant NFC as NfcRepository
+    participant HW as NAC1080 硬件
+    participant DR as DeviceRepository
+    participant Cloud as 云端 /devices
+
+    UI->>VM: onStartNfcScan(nickname)
+    VM->>UI: onNfcScanStateChanged(scanning)
+    Note over VM: 等待 NFC Tag...
+    HW-->>VM: MainActivity 回调 onNfcTagDiscovered(tag)
+    VM->>UC: invoke(nickname, tag)
+    UC->>NFC: connect(tag)
+    NFC->>HW: IsoDep.connect()
+    UC->>NFC: readDeviceId(isoDep)
+    NFC->>HW: 发送读取ID指令
+    HW-->>NFC: deviceId
+    UC->>NFC: disconnect()
+    UC->>DR: addDevice(deviceId, nickname)
+    DR->>DR: 写入 Room
+    DR->>Cloud: POST /devices/bind [Phase 2]
+    Cloud-->>DR: Device 信息
+    DR-->>UC: Device
+    UC-->>VM: Result.success(device)
+    VM->>UI: onNfcScanStateChanged(success, deviceId)
+```
+
+### 实现规格（Phase 2 新增）
+
+#### DeviceListViewModel.loadDevices 变更
+
+```kotlin
+fun loadDevices() {
+    viewModelScope.launch {
+        _uiState.update { it.copy(isLoading = true) }
+        try {
+            deviceRepository.fetchAndCacheDevices()  // Phase 2：拉云端写 Room
+            _uiState.update { it.copy(isLoading = false, isOffline = false) }
+        } catch (e: IOException) {
+            _uiState.update { it.copy(isLoading = false, isOffline = true) }
+        }
+    }
+}
+```
+
+### 验收要点
+
+- [ ] 进入列表：先展示缓存，后台拉云端，无感知刷新
+- [ ] 断网时：显示缓存 + 离线横幅
+- [ ] 添加设备：NFC 读取 + 云端绑定（409 冲突时提示「设备已被绑定」）
+- [ ] 解绑设备：云端成功后删 Room，断网时禁止操作
 
 ---
 
-## 6. UseCase 清单
+## Phase 3：设备有效性时效校验
 
-### 6.1 GetDeviceListUseCase（`domain/usecase/device/`）
-**输入**：无  
-**输出**：`Flow<List<Device>>`（响应式，Room 变化时自动推送）
+### 新增 / 变更说明
 
-**逻辑**：
-- 返回 `DeviceRepository.observeDevices()`（Room 的 Flow）
-- ViewModel 收集此 Flow，网络刷新后 Room 更新，Flow 自动触发 UI 刷新
-
----
-
-### 6.2 SearchDevicesUseCase（`domain/usecase/device/`）
-**输入**：`devices: List<Device>, keyword: String`  
-**输出**：`List<Device>`
-
-**逻辑**（纯本地，不调接口）：
-- `keyword.isBlank()` → 返回原列表
-- 否则过滤 `device.nickname.contains(keyword, ignoreCase = true)`
-
----
-
-### 6.3 AddDeviceUseCase（`domain/usecase/device/`）
-**输入**：`nickname: String, tag: Tag`（NFC Tag 对象）  
-**输出**：`Result<Device>`
-
-**执行步骤**：
-1. 通过 `NfcRepository.connect(tag)` 建立 IsoDep 连接
-2. 发送"读取设备ID"指令（非开锁操作位，是绑定专用指令）→ 获取 `deviceId`
-3. 关闭 NFC 连接
-4. 调用 `DeviceRepository.addDevice(deviceId, nickname)` → POST `/devices/bind`
-5. 云端返回完整 Device 信息 → 写入 Room 缓存
-6. 返回 `Device`
-
-**失败情况**：
-- NFC 读取失败 → 提示"NFC 读取失败，请重新靠近"
-- 设备已被绑定（云端返回 `409`）→ 提示"该设备已被其他账号绑定"
-
----
-
-### 6.4 RemoveDeviceUseCase（`domain/usecase/device/`）
-**输入**：`deviceId: String`  
-**输出**：`Result<Unit>`
-
-**执行步骤**：
-1. 调用 `DeviceRepository.removeDevice(deviceId)` → DELETE `/devices/{deviceId}`
-2. 成功后从 Room 删除该设备的 `device_cache` 和 `authorized_user_cache` 记录
-3. 刷新设备列表
-
----
-
-### 6.5 GetDeviceDetailUseCase（`domain/usecase/device/`）
-**输入**：`deviceId: String`  
-**输出**：`Result<Pair<Device, List<AuthorizedUser>>>`
-
-**执行步骤**：
-1. 从 Room 读取 `device_cache` 中的设备信息（立即返回缓存）
-2. 同时发起网络请求刷新 `authorized_user_cache`（授权用户列表变化频繁，不用旧缓存）
-3. 返回最新 Device + 最新 AuthorizedUsers
-
----
-
-## 7. Repository 接口（DeviceRepository）
-
-**文件**：`data/repository/DeviceRepository.kt`
-
-| 方法 | 参数 | 返回 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `observeDevices()` | — | `Flow<List<Device>>` | Room 的 Flow，自动响应变化 |
-| `fetchAndCacheDevices()` | — | `Unit` | GET `/devices`，结果写入 Room |
-| `addDevice(deviceId, nickname)` | String, String | `Device` | POST `/devices/bind` |
-| `removeDevice(deviceId)` | String | `Unit` | DELETE `/devices/{deviceId}` |
-| `getDeviceDetail(deviceId)` | String | `Pair<Device, List<AuthorizedUser>>` | GET `/devices/{deviceId}` |
-| `clearLocalCache()` | — | `Unit` | 清空 Room 所有设备缓存（登出时调用） |
-| `markInvalid(deviceId)` | String | `Unit` | 设置 Room 中 `isValid=false` |
-
----
-
-## 8. 设备有效性与缓存时效
-
-| 状态 | 触发条件 | UI 表现 |
-| :--- | :--- | :--- |
-| 正常（isValid=true） | 默认 | 正常显示，Unlock/Manage 可点击 |
-| 权限已撤销（isValid=false） | 403 或前台刷新对账 | 红色标记"权限已撤销"，按钮禁用 |
-| 数据较旧（lastSyncAt > 24h） | 时间戳检查 | 旁边显示"⚠ 数据较旧" |
-| 数据过期（lastSyncAt > 7天） | 时间戳检查 | 强制要求联网刷新，禁用操作按钮 |
-
----
-
-## 9. 边界与异常
-
-| 场景 | 处理 |
+| 新增项 | 说明 |
 | :--- | :--- |
-| 设备列表为空（新账号） | 展示"你还没有绑定任何设备"引导卡，底部导航 Add 按钮高亮提示 |
-| NFC 扫描到已绑定的同款锁（同 deviceId） | `addDevice` 返回当前设备信息，提示"该设备已在你的列表中" |
-| 删除设备时网络断开 | 提示"网络不可用，请联网后操作"（删除必须联网，不允许离线删除） |
-| 设备详情页加载失败 | 展示 Room 缓存的基本信息 + 授权用户列表显示"加载失败，下拉刷新" |
+| `lastSyncAt` 时效规则 | 24h/7天 阈值检测，控制 UI 警告和操作禁用 |
+| `isValid=false` 时 UI | 红色角标「权限已撤销」，操作按钮禁用 |
+
+### 设备状态展示逻辑
+
+```mermaid
+flowchart TD
+    A[设备 Card 渲染] --> B{isValid?}
+    B -- false --> C[红色角标\n权限已撤销\n按钮禁用]
+    B -- true --> D{lastSyncAt 距今?}
+    D -- 小于24h --> E[正常显示]
+    D -- 24h~7天 --> F[旁边显示 ⚠ 数据较旧]
+    D -- 超过7天 --> G[按钮禁用\n提示数据已过期请刷新]
+```
+
+### 验收要点
+
+- [ ] `isValid=false` 设备灰化，操作按钮禁用
+- [ ] 缓存超 7 天时操作按钮禁用，提示正确
+- [ ] 下拉刷新后 `lastSyncAt` 更新，警告消失

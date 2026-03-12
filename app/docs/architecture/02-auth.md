@@ -6,205 +6,304 @@
 
 ---
 
-## 1. 模块职责
+## Phase 1：不参与（Stub / 假流程）
 
-| 职责 | 说明 |
+### 职责范围
+
+Phase 1 整个模块不参与。所有认证相关类提供 stub，避免编译失败并为 Phase 2 预留接口。
+
+| 组件 | Phase 1 处理方式 |
 | :--- | :--- |
-| 账号登录 | 手机号 + 密码验证，成功后存储双 Token |
-| 登出 | 清除本地 Token 和 Room 缓存，通知云端吊销 |
-| 修改密码 | 三段式校验（当前/新/确认），调用云端接口 |
-| Token 有效性管理 | 本地解析 JWT exp，无网络时仍可判断有效性 |
-| 静默刷新 | AccessToken 过期时，无感知地用 RefreshToken 续期 |
-| 单设备策略 | 用户在新设备登录时，云端吊销旧设备所有 Token |
+| `AuthViewModel` | 空实现，所有方法 `TODO("Phase 2")` |
+| `AuthRepository` | `FakeAuthRepository`，返回固定值或静默忽略 |
+| 登录页 | 不显示；Splash 直接跳首页 |
+| WebView 桥 `onLoginClicked` | stub：只打日志 |
+| WebView 桥 `onLogout` | stub：可选假流程（直接回调 `window.onLogoutDone`） |
+| Token 存储 | 无 |
 
----
+### FakeAuthRepository 骨架
 
-## 2. 数据模型
+**文件**：`data/fake/FakeAuthRepository.kt`
 
-### User（`domain/model/User.kt`）
-| 字段 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `userId` | String | 唯一标识 |
-| `phone` | String | 手机号（脱敏展示时只显示后四位） |
-| `username` | String | 显示名称 |
-| `role` | enum（Owner / Guest） | 账号角色 |
-| `email` | String? | 邮箱（可选） |
+```kotlin
+class FakeAuthRepository @Inject constructor() : AuthRepository {
 
-### AuthTokens（Token 持有对象，不落盘原始类，加密后存 DataStore）
-| 字段 | 说明 |
-| :--- | :--- |
-| `accessToken` | 短效 Token（JWT），用于接口认证 |
-| `refreshToken` | 长效 Token，仅用于刷新 AccessToken |
+    override suspend fun login(phone: String, password: String): Pair<User, AuthTokens> {
+        // Phase 1：不会被调用（无登录页）
+        // 若意外调用，返回固定调试用户
+        return Pair(
+            User(
+                userId   = "debug-user-001",
+                phone    = "13800000000",
+                username = "Debug User",
+                role     = UserRole.Owner,
+                email    = null
+            ),
+            AuthTokens(
+                accessToken  = "fake-access-token-phase1",
+                refreshToken = "fake-refresh-token-phase1"
+            )
+        )
+        // TODO("Phase 2: 替换为 RemoteAuthRepository，调用 POST /auth/login")
+    }
 
----
+    override suspend fun logout(): Unit {
+        // Phase 1：静默忽略（无 Token 需要吊销）
+        // TODO("Phase 2: POST /auth/logout 通知云端吊销")
+    }
 
-## 3. ViewModel：AuthViewModel
+    override suspend fun refreshToken(refreshToken: String): AuthTokens {
+        // TODO("Phase 2: POST /auth/refresh")
+        throw UnsupportedOperationException("Phase 2: refreshToken not implemented")
+    }
 
-**文件**：`presentation/auth/AuthViewModel.kt`
+    override suspend fun updatePassword(currentPassword: String, newPassword: String): Unit {
+        // TODO("Phase 2: PUT /auth/password")
+        throw UnsupportedOperationException("Phase 2: updatePassword not implemented")
+    }
 
-### UiState
-```
-sealed class AuthUiState {
-    object Idle          : AuthUiState()   // 初始状态
-    object Loading       : AuthUiState()   // 请求中，按钮禁用，显示加载动效
-    data class LoggedIn(val user: User) : AuthUiState()  // 登录成功
-    data class Error(val message: String) : AuthUiState() // 登录失败，展示错误文案
-    object LoggedOut     : AuthUiState()   // 已登出，跳转登录页
-    object PasswordUpdated : AuthUiState() // 密码修改成功，返回设置页
+    override suspend fun deleteAccount(): Unit {
+        // TODO("Phase 2: DELETE /auth/account")
+        throw UnsupportedOperationException("Phase 2: deleteAccount not implemented")
+    }
 }
 ```
 
-### 方法（由 AndroidBridge 调用）
-| 方法 | 触发来源 | 职责 |
-| :--- | :--- | :--- |
-| `login(phone, password)` | `onLoginClicked` | 校验格式 → LoginUseCase → 更新 UiState |
-| `logout()` | `onLogout` | LogoutUseCase → 清除数据 → UiState.LoggedOut |
-| `updatePassword(current, new, confirm)` | `onUpdatePasswordClicked` | UpdatePasswordUseCase → UiState |
-| `deleteAccount()` | `onDeleteAccount` | DeleteAccountUseCase → 清除全部本地数据 |
+### AuthViewModel Stub 骨架
 
----
+**文件**：`presentation/auth/AuthViewModel.kt`
 
-## 4. UseCase 清单
+```kotlin
+@HiltViewModel
+class AuthViewModel @Inject constructor(
+    // Phase 2+ 才注入真实 UseCase：
+    // private val loginUseCase: LoginUseCase,
+    // private val logoutUseCase: LogoutUseCase,
+    // private val updatePasswordUseCase: UpdatePasswordUseCase,
+) : ViewModel() {
 
-### 4.1 LoginUseCase（`domain/usecase/auth/LoginUseCase.kt`）
+    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
+    val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
-**输入**：`phone: String, password: String`  
-**输出**：`Result<User>`
+    fun login(phone: String, password: String) {
+        // TODO("Phase 2: loginUseCase(phone, password)")
+    }
 
-**执行步骤**：
-1. 格式校验：手机号 11 位纯数字；密码非空且长度 ≥ 8
-2. 调用 `AuthRepository.login(phone, password)` → 获取 `AuthTokens` 和 `User`
-3. 调用 `PreferencesRepository.saveTokens(tokens)` 加密存储双 Token
-4. 返回 `User`，ViewModel 更新 UiState.LoggedIn
+    fun logout() {
+        // TODO("Phase 2: logoutUseCase()")
+    }
 
-**失败情况**：
-- 格式不合法 → 直接返回 `Result.failure(ValidationException("手机号格式错误"))`
-- 网络错误 / 密码错误 → `AuthRepository` 抛出对应异常，转换为用户友好文案
+    fun updatePassword(current: String, new: String, confirm: String) {
+        // TODO("Phase 2: updatePasswordUseCase(current, new, confirm)")
+    }
 
----
+    fun deleteAccount() {
+        // TODO("Phase 2: deleteAccountUseCase()")
+    }
+}
 
-### 4.2 LogoutUseCase（`domain/usecase/auth/LogoutUseCase.kt`）
-
-**输入**：无  
-**输出**：`Result<Unit>`
-
-**执行步骤**：
-1. 调用 `AuthRepository.logout()` — 通知云端吊销当前设备 Token（网络失败也继续本地清除）
-2. 调用 `PreferencesRepository.clearTokens()` 清除 DataStore 中的双 Token
-3. 调用 `DeviceRepository.clearLocalCache()` 清除 Room 设备缓存（logout 时不保留缓存）
-
----
-
-### 4.3 UpdatePasswordUseCase（`domain/usecase/auth/UpdatePasswordUseCase.kt`）
-
-**输入**：`currentPassword: String, newPassword: String, confirmPassword: String`  
-**输出**：`Result<Unit>`
-
-**执行步骤**：
-1. 校验 `newPassword == confirmPassword`，否则返回 `ValidationException`
-2. 校验 `newPassword.length >= 8`，否则返回 `ValidationException`
-3. 调用 `AuthRepository.updatePassword(currentPassword, newPassword)` → 云端验证旧密码并更新
-4. 成功后返回 `Result.success(Unit)`
-
----
-
-### 4.4 ValidateTokenUseCase（`domain/usecase/auth/ValidateTokenUseCase.kt`）
-
-**输入**：无  
-**输出**：`TokenStatus`（enum：Valid / Expired / Missing）
-
-**执行步骤**（纯本地，无网络）：
-1. 读取 DataStore 中的 AccessToken（解密后）
-2. 解析 JWT payload 的 `exp` 字段（Base64 decode，不需要签名验证）
-3. 比较 `exp` 与当前时间戳（预留 60 秒缓冲，避免时钟误差）
-4. 返回对应状态
-
----
-
-### 4.5 RefreshTokenUseCase（`domain/usecase/auth/RefreshTokenUseCase.kt`）
-
-**输入**：无  
-**输出**：`Result<Unit>`
-
-**执行步骤**：
-1. 读取 DataStore 中的 RefreshToken
-2. 调用 `AuthRepository.refreshToken(refreshToken)` → 获取新的双 Token
-3. 调用 `PreferencesRepository.saveTokens(newTokens)` 覆盖存储
-4. 失败时返回 `Result.failure`，调用方（SplashViewModel 或 AuthInterceptor）负责后续清除逻辑
-
----
-
-### 4.6 DeleteAccountUseCase（`domain/usecase/auth/DeleteAccountUseCase.kt`）
-
-**输入**：无  
-**输出**：`Result<Unit>`
-
-**执行步骤**：
-1. 调用 `AuthRepository.deleteAccount()` — 云端删除账号、所有设备绑定、所有授权关系
-2. `PreferencesRepository.clearAll()` — 清除 DataStore 所有字段
-3. 清除全部 Room 表数据（`DeviceDao.deleteAll()`、`AuthorizedUserDao.deleteAll()`、`PendingReportDao.deleteAll()`）
-
----
-
-## 5. Repository 接口（AuthRepository）
-
-**文件**：`data/repository/AuthRepository.kt`
-
-| 方法 | 参数 | 返回 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `login(phone, password)` | String, String | `Pair<User, AuthTokens>` | 调用 POST `/auth/login` |
-| `logout()` | — | `Unit` | 调用 POST `/auth/logout`，网络失败不抛出 |
-| `refreshToken(refreshToken)` | String | `AuthTokens` | 调用 POST `/auth/refresh` |
-| `updatePassword(current, new)` | String, String | `Unit` | 调用 PUT `/auth/password` |
-| `deleteAccount()` | — | `Unit` | 调用 DELETE `/auth/account` |
-
----
-
-## 6. Token 生命周期完整流程
-
-### 6.1 Token 存储（加密）
-- AccessToken 和 RefreshToken 均通过 Android Keystore 生成的 AES-GCM 密钥加密后存入 DataStore
-- 密钥绑定设备，不可导出，不可跨设备解密
-- 具体加密实现见 `11-security.md`
-
-### 6.2 Token 使用（自动注入）
-- 所有 API 请求通过 OkHttp 的 `AuthInterceptor` 自动注入 `Authorization: Bearer {accessToken}`
-- 具体拦截器实现见 `09-network.md`
-
-### 6.3 Token 401 处理（透明续期）
-在 `AuthInterceptor` 中处理（见 `09-network.md`）：
-```
-收到 401 响应
-  ↓
-尝试 RefreshTokenUseCase（最多一次，加互斥锁防止并发刷新）
-  ↓ 成功 → 用新 Token 重试原请求一次
-  ↓ 失败 → 清除 Token → 发送"强制退出"事件 → UI 跳转登录页
+sealed class AuthUiState {
+    object Idle              : AuthUiState()
+    object Loading           : AuthUiState()
+    data class LoggedIn(val user: User) : AuthUiState()
+    data class Error(val message: String) : AuthUiState()
+    object LoggedOut         : AuthUiState()
+    object PasswordUpdated   : AuthUiState()
+}
 ```
 
-### 6.4 换机登录自动吊销（单设备策略）
-- 云端在处理 `/auth/login` 时，会将该账号的旧设备 Token 全部加入黑名单
-- 旧设备下次发起请求时，`AuthInterceptor` 收到 `401`，`RefreshToken` 也会失败（已被黑名单）
-- 最终触发强制退出，提示："您的账号已在新设备登录，请重新验证"
+### 验收要点（Phase 1）
+
+- [ ] 编译通过，没有因认证模块缺失导致的编译错误
+- [ ] App 启动直接进首页，无登录页闪现
+- [ ] WebView 桥 `onLoginClicked` / `onLogout` 被调用时不崩溃
 
 ---
 
-## 7. 后台 Token 有效性校验（App 首页加载后触发）
+## Phase 2：完整认证（登录/Token 生命周期/静默刷新）
 
-登录后进入首页时，在 `HomeViewModel.init{}` 中触发一次后台轻量校验：
-- 调用 GET `/auth/validate`（仅验证 Token，不返回数据）
-- 返回 `200` → 无操作
-- 返回 `401` → 强制退出（Token 被后台吊销，即换机场景的旧设备兜底）
-- 网络不通 → 静默忽略，允许离线使用
+### 新增 / 变更说明
 
----
-
-## 8. 边界与异常
-
-| 场景 | 处理 |
+| 新增项 | 说明 |
 | :--- | :--- |
-| 登录时无网络 | `AuthRepository` 抛出 `IOException`，转换为"网络不可用，请检查连接" |
-| 手机号不存在 / 密码错误 | 云端返回 `401`，转换为"手机号或密码错误" |
-| RefreshToken 过期（90 天未登录） | `refreshToken` 接口返回 `401`，强制退出 |
-| 修改密码时旧密码错误 | 云端返回 `400`，提示"当前密码不正确" |
-| 账号注销失败（网络错误） | 允许重试；提示"注销请求失败，请稍后再试" |
-| DataStore 加密异常（密钥丢失，极罕见） | catch 异常，清除所有 DataStore 数据，跳转登录页 |
+| 登录页 | Splash → Token 无效 → LoginActivity |
+| `LoginUseCase` | 格式校验 + 调 `/auth/login` + 存 Token |
+| `LogoutUseCase` | 云端吊销 + 清 Token + 清 Room |
+| `UpdatePasswordUseCase` | 三段式校验 + 调 `/auth/password` |
+| `ValidateTokenUseCase` | 本地解析 JWT exp（纯本地，无网络） |
+| `RefreshTokenUseCase` | 携带 RefreshToken 调 `/auth/refresh` |
+| Token 加密存储 | Android Keystore AES-GCM（见 `11-security.md`） |
+| `AuthInterceptor` | 自动注入 Token + 401 透明刷新（见 `09-network.md`） |
+
+### 业务流程图
+
+```mermaid
+flowchart TD
+    A[用户点击登录] --> B[AuthViewModel.login\nphone + password]
+    B --> C{格式校验}
+    C -- 失败 --> D[UiState.Error 格式提示]
+    C -- 通过 --> E[LoginUseCase\nPOST /auth/login]
+    E --> F{云端响应}
+    F -- 200 --> G[PreferencesRepository.saveTokens\nAES-GCM 加密存 DataStore]
+    G --> H[UiState.LoggedIn\n跳首页]
+    F -- 401 手机号/密码错误 --> I[UiState.Error '手机号或密码错误']
+    F -- 网络失败 --> J[UiState.Error '网络不可用']
+```
+
+### 数据模型
+
+```kotlin
+data class User(
+    val userId: String,
+    val phone: String,
+    val username: String,
+    val role: UserRole,   // Owner / Guest
+    val email: String?
+)
+
+data class AuthTokens(
+    val accessToken: String,
+    val refreshToken: String
+)
+
+enum class TokenStatus { Valid, Expired, Missing }
+```
+
+### UseCase 清单
+
+#### LoginUseCase
+
+```kotlin
+class LoginUseCase @Inject constructor(
+    private val authRepository: AuthRepository,
+    private val preferencesRepository: PreferencesRepository
+) {
+    suspend operator fun invoke(phone: String, password: String): Result<User> {
+        if (!phone.matches(Regex("\\d{11}"))) return Result.failure(ValidationException("手机号格式错误"))
+        if (password.length < 8) return Result.failure(ValidationException("密码至少8位"))
+        return try {
+            val (user, tokens) = authRepository.login(phone, password)
+            preferencesRepository.saveTokens(tokens)
+            Result.success(user)
+        } catch (e: ApiException) {
+            Result.failure(Exception(mapApiError(e)))
+        } catch (e: IOException) {
+            Result.failure(Exception("网络不可用，请检查连接"))
+        }
+    }
+}
+```
+
+#### ValidateTokenUseCase（纯本地）
+
+```kotlin
+class ValidateTokenUseCase @Inject constructor(
+    private val preferencesRepository: PreferencesRepository
+) {
+    suspend operator fun invoke(): TokenStatus {
+        val token = preferencesRepository.getAccessToken() ?: return TokenStatus.Missing
+        return try {
+            val exp = parseJwtExp(token)
+            val bufferMs = 60_000L
+            if (System.currentTimeMillis() + bufferMs < exp * 1000) TokenStatus.Valid
+            else TokenStatus.Expired
+        } catch (e: Exception) {
+            TokenStatus.Expired
+        }
+    }
+
+    private fun parseJwtExp(jwt: String): Long {
+        val payload = jwt.split(".")[1]
+        val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_PADDING)
+        val json = JSONObject(String(decoded))
+        return json.getLong("exp")
+    }
+}
+```
+
+#### LogoutUseCase
+
+```kotlin
+class LogoutUseCase @Inject constructor(
+    private val authRepository: AuthRepository,
+    private val preferencesRepository: PreferencesRepository,
+    private val deviceRepository: DeviceRepository
+) {
+    suspend operator fun invoke() {
+        try { authRepository.logout() } catch (_: Exception) { /* 网络失败也继续本地清除 */ }
+        preferencesRepository.clearTokens()
+        deviceRepository.clearLocalCache()
+    }
+}
+```
+
+### 验收要点（Phase 2）
+
+- [ ] 登录成功：Token 加密存储，跳首页
+- [ ] 登录失败（密码错误）：显示 `"手机号或密码错误"`
+- [ ] 登出：Token 清除，Room 清空，跳登录页
+- [ ] 修改密码：三段式校验，旧密码错误时提示
+- [ ] `ValidateTokenUseCase` 离线可用（纯本地 JWT 解析）
+
+---
+
+## Phase 3：换机吊销 + 账号注销
+
+### 新增 / 变更说明
+
+| 新增项 | 说明 |
+| :--- | :--- |
+| 换机吊销（旧设备被踢） | `HomeViewModel.init` 调 `GET /auth/validate`，401 → 强退 |
+| 强退事件广播 | `ForceLogoutEvent` SharedFlow，`MainActivity` 监听跳登录页 |
+| `DeleteAccountUseCase` | 云端注销 + 清 DataStore + 清 Room 全部三表 |
+
+### Token 生命周期时序图
+
+```mermaid
+sequenceDiagram
+    participant App as App（任意请求）
+    participant AI as AuthInterceptor
+    participant DS as DataStore
+    participant Cloud as 云端 /auth
+
+    App->>AI: 发起 API 请求
+    AI->>DS: 读取 AccessToken（解密）
+    AI->>Cloud: 请求 + Authorization: Bearer {token}
+    Cloud-->>AI: 401 Token 已过期
+
+    note over AI: 加互斥锁，防止并发刷新
+
+    AI->>DS: 读取 RefreshToken
+    AI->>Cloud: POST /auth/refresh
+    Cloud-->>AI: 新 Token 或 401
+
+    alt 刷新成功
+        AI->>DS: saveTokens(newTokens)
+        AI->>Cloud: 用新 Token 重试原请求
+        Cloud-->>App: 正常响应
+    else 刷新失败
+        AI->>DS: clearTokens()
+        AI->>App: 发送 ForceLogoutEvent
+        App->>App: window.onForceLogout\n跳登录页
+    end
+```
+
+### 换机吊销流程
+
+```mermaid
+flowchart TD
+    A[新设备登录] --> B[云端将旧设备 Token 加入黑名单]
+    B --> C[旧设备下次 API 请求]
+    C --> D[AuthInterceptor 收到 401]
+    D --> E[尝试 RefreshToken\nPOST /auth/refresh]
+    E --> F{云端响应}
+    F -- 401 RefreshToken 也在黑名单 --> G[clearTokens\n发 ForceLogoutEvent]
+    G --> H[window.onForceLogout\n提示'账号已在新设备登录'\n跳登录页]
+```
+
+### 验收要点（Phase 3）
+
+- [ ] 旧设备：Token 被吊销后下次操作正确强退
+- [ ] 强退提示文案：`"您的账号已在新设备登录，请重新验证"`
+- [ ] `DeleteAccountUseCase`：云端注销 + 三表全清
+- [ ] 注销失败（网络断开）：提示错误，不清本地数据

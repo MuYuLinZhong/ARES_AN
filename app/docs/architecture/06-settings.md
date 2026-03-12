@@ -1,146 +1,221 @@
 # 06 · 设置页模块：用户偏好 · 在线/离线模式 · 账号管理
 
 > **模块边界**：用户偏好持久化（在线模式/震动/NFC灵敏度）、账号信息展示、修改密码入口、账号注销。  
-> **依赖模块**：`08-storage`（DataStore 读写）、`02-auth`（登出/注销）  
+> **依赖模块**：`08-storage`（DataStore 读写）、`02-auth`（登出/注销，Phase 2+）  
 > **被依赖**：`07-webview-bridge`（设置事件调用）
 
 ---
 
-## 1. 模块职责
+## Phase 1：偏好设置（震动 + NFC 灵敏度）
+
+### 职责范围
 
 | 职责 | 说明 |
 | :--- | :--- |
-| 用户信息展示 | 头像、用户名、角色标签、邮箱（来自登录时存储的 User） |
-| 修改密码 | 入口跳转，执行逻辑在 `02-auth.md` |
-| 在线/离线模式切换 | Toggle 开关，持久化到 DataStore |
-| 震动反馈开关 | Toggle 开关，持久化到 DataStore |
-| NFC 灵敏度设置 | 下拉选择 High/Medium/Low，持久化到 DataStore |
-| 退出登录 | 清除 Token 和本地缓存，跳登录页 |
-| 账号注销 | 二次确认后调用云端注销接口，清除全部本地数据 |
+| 震动反馈开关 | DataStore 持久化 |
+| NFC 灵敏度设置 | DataStore 持久化 |
+| **跳过** | 登出、注销、修改密码入口、用户信息展示、在线模式 |
 
----
+### 业务流程图
 
-## 2. 数据模型
+```mermaid
+flowchart TD
+    A[进入设置页] --> B[SettingsViewModel.loadSettings]
+    B --> C[读取 DataStore 偏好]
+    C --> D[pushToJs onSettingsLoaded\n仅返回 preferences\n无 user 信息]
+    D --> E[前端渲染偏好 UI]
 
-### UserPreferences（`domain/model/UserPreferences.kt`）
-| 字段 | 类型 | 默认值 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `onlineModeEnabled` | Boolean | `true` | 开启时强制联网加密；关闭时降级离线模式（开发阶段预留，当前仅存储，不改变流程） |
-| `vibrationEnabled` | Boolean | `true` | NFC 感应成功/操作完成时触发震动 |
-| `nfcSensitivity` | enum（High / Medium / Low） | `Medium` | 传递给 `NfcAdapter` 的参数（当前 Android API 不直接支持灵敏度调节，此字段用于 UI 展示预留） |
+    F[用户切换震动开关] --> G[onToggleVibration]
+    G --> H[SaveUserPreferencesUseCase\n更新 DataStore]
+    H --> I[pushToJs onPreferencesSaved]
 
----
-
-## 3. ViewModel：SettingsViewModel
-
-**文件**：`presentation/settings/SettingsViewModel.kt`
-
-### UiState
+    J[用户修改 NFC 灵敏度] --> K[onNfcSensitivityChanged]
+    K --> H
 ```
+
+### 实现规格
+
+#### SettingsViewModel（Phase 1 版）
+
+```kotlin
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val getUserPreferencesUseCase: GetUserPreferencesUseCase,
+    private val saveUserPreferencesUseCase: SaveUserPreferencesUseCase,
+    // Phase 2+ 注入：private val logoutUseCase: LogoutUseCase,
+    // Phase 2+ 注入：private val deleteAccountUseCase: DeleteAccountUseCase,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(SettingsUiState())
+    val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            getUserPreferencesUseCase().collect { prefs ->
+                _uiState.update { it.copy(preferences = prefs) }
+            }
+        }
+    }
+
+    fun loadSettings() {
+        // Phase 1：只加载偏好，不加载用户信息
+        // user 保持 null，前端 onSettingsLoaded 仅含 preferences
+    }
+
+    fun onToggleVibration(enabled: Boolean) {
+        viewModelScope.launch {
+            saveUserPreferencesUseCase { copy(vibrationEnabled = enabled) }
+        }
+    }
+
+    fun onNfcSensitivityChanged(level: String) {
+        viewModelScope.launch {
+            saveUserPreferencesUseCase { copy(nfcSensitivity = NfcSensitivity.fromString(level)) }
+        }
+    }
+
+    // ======== Phase 2 Stub ========
+
+    fun onToggleOnlineMode(enabled: Boolean) {
+        // TODO("Phase 2: saveUserPreferencesUseCase { copy(onlineModeEnabled = enabled) }")
+    }
+
+    fun onLogout() {
+        // TODO("Phase 2: logoutUseCase() → 清 Token + Room → UiState.LogoutDone")
+    }
+
+    fun onDeleteAccountClicked() {
+        // TODO("Phase 2: _uiState.update { it.copy(showDeleteConfirmDialog = true) }")
+    }
+
+    fun confirmDeleteAccount() {
+        // TODO("Phase 2: deleteAccountUseCase() → 清除全部数据 → UiState.DeleteDone")
+    }
+
+    fun dismissDeleteDialog() {
+        // TODO("Phase 2: _uiState.update { it.copy(showDeleteConfirmDialog = false) }")
+    }
+}
+
 data class SettingsUiState(
-    val user: User? = null,                         // 当前账号信息
+    val user: User? = null,                      // Phase 2+ 填充
     val preferences: UserPreferences = UserPreferences(),
     val isLoading: Boolean = false,
     val logoutState: LogoutState = LogoutState.Idle,
-    val deleteAccountState: DeleteAccountState = DeleteAccountState.Idle,
-    val showDeleteConfirmDialog: Boolean = false    // 控制注销二次确认弹窗
+    val showDeleteConfirmDialog: Boolean = false
 )
+```
 
-sealed class LogoutState {
-    object Idle : LogoutState()
-    object Loading : LogoutState()
-    object Done : LogoutState()   // 完成后跳转登录页
+#### WebView 回调（Phase 1 版 onSettingsLoaded）
+
+```json
+// Phase 1：不含 user 字段
+{
+  "preferences": {
+    "vibrationEnabled": true,
+    "nfcSensitivity": "Medium"
+  }
 }
 
-sealed class DeleteAccountState {
-    object Idle : DeleteAccountState()
-    object Loading : DeleteAccountState()
-    object Done : DeleteAccountState()
-    data class Error(val message: String) : DeleteAccountState()
+// Phase 2：含完整 user 字段
+{
+  "user": { "userId": "xxx", "username": "Alex", "phone": "138****8000", "role": "Owner" },
+  "preferences": {
+    "onlineModeEnabled": true,
+    "vibrationEnabled": true,
+    "nfcSensitivity": "Medium"
+  }
 }
 ```
 
-### 方法
-| 方法 | 触发来源 | 职责 |
+### 验收要点（Phase 1）
+
+- [ ] 进入设置页：偏好值正确从 DataStore 读取并展示
+- [ ] 切换震动开关：DataStore 持久化，App 重启后值保留
+- [ ] 修改 NFC 灵敏度：DataStore 持久化
+- [ ] `onSettingsLoaded` 回调不含 user（前端不崩溃）
+- [ ] 登出/注销按钮不出现或灰色占位（不触发崩溃）
+
+---
+
+## Phase 2：完整账号管理（登出 + 注销 + 用户信息）
+
+### 新增 / 变更说明
+
+| 变更项 | Phase 1 | Phase 2 |
 | :--- | :--- | :--- |
-| `loadSettings()` | 页面进入 | 读取 DataStore + User，更新 UiState |
-| `onToggleOnlineMode(enabled)` | AndroidBridge | SaveUserPreferencesUseCase |
-| `onToggleVibration(enabled)` | AndroidBridge | SaveUserPreferencesUseCase |
-| `onNfcSensitivityChanged(level)` | AndroidBridge | SaveUserPreferencesUseCase |
-| `onLogout()` | AndroidBridge | LogoutUseCase（见 02-auth.md） |
-| `onDeleteAccountClicked()` | AndroidBridge | 设置 `showDeleteConfirmDialog = true` |
-| `confirmDeleteAccount()` | AndroidBridge | DeleteAccountUseCase（见 02-auth.md） |
-| `dismissDeleteDialog()` | AndroidBridge | 关闭弹窗，取消注销 |
+| 用户信息 | 空 | 从 DataStore/内存读取，展示头像/用户名/角色/邮箱 |
+| 登出 | stub | `LogoutUseCase` → 清 Token + Room → 跳登录页 |
+| 账号注销 | stub | 二次确认 → `DeleteAccountUseCase` → 清除全部 |
+| 修改密码入口 | 隐藏 | 跳转 UpdatePassword 页 |
+| 在线模式开关 | stub | `SaveUserPreferencesUseCase { copy(onlineModeEnabled) }` |
+
+### 数据流图
+
+```mermaid
+flowchart LR
+    subgraph ui [WebView React]
+        S1[设置页 UI]
+    end
+
+    subgraph vm [SettingsViewModel]
+        S2[SettingsUiState]
+        S3[loadSettings]
+        S4[onLogout]
+        S5[onToggleVibration]
+    end
+
+    subgraph uc [UseCase 层]
+        U1[GetUserPreferencesUseCase]
+        U2[SaveUserPreferencesUseCase]
+        U3[LogoutUseCase]
+        U4[DeleteAccountUseCase]
+    end
+
+    subgraph storage [Data 层]
+        D1[DataStore\n偏好 + Token]
+        D2[Room\ndevice_cache]
+        D3[AuthRepository\n/auth/logout]
+    end
+
+    S1 -- onToggleVibration --> S5
+    S5 --> U2 --> D1
+    S3 --> U1 --> D1
+    U1 -- Flow --> S2
+    S2 -- onSettingsLoaded --> S1
+    S4 --> U3
+    U3 --> D3
+    U3 --> D1
+    U3 --> D2
+```
+
+### 实现规格（Phase 2 完整 onLogout）
+
+```kotlin
+fun onLogout() {
+    viewModelScope.launch {
+        _uiState.update { it.copy(logoutState = LogoutState.Loading) }
+        logoutUseCase()  // 通知云端 + 清 Token + 清 Room（网络失败也继续本地清除）
+        _uiState.update { it.copy(logoutState = LogoutState.Done) }
+        // SplashActivity 监听到 Done → 跳登录页
+    }
+}
+```
+
+### 验收要点（Phase 2）
+
+- [ ] 登出：Token 清除，Room 设备缓存清除，跳转登录页
+- [ ] 注销：二次确认弹窗，确认后清除全部数据，跳登录页
+- [ ] 修改密码入口：跳转 UpdatePassword 页
+- [ ] 在线模式 Toggle：DataStore 持久化
+- [ ] 用户信息（头像/用户名/角色/邮箱）正确展示
 
 ---
 
-## 4. UseCase 清单
+## Phase 3：无新增
 
-### 4.1 GetUserPreferencesUseCase（`domain/usecase/settings/`）
+Phase 3 重点验收：
 
-**输入**：无  
-**输出**：`Flow<UserPreferences>`（响应式，DataStore 变化时自动推送）
-
-**逻辑**：
-- 直接返回 `PreferencesRepository.observePreferences()`
-- ViewModel 通过 `collectAsState` 驱动 UI 实时响应
-
----
-
-### 4.2 SaveUserPreferencesUseCase（`domain/usecase/settings/`）
-
-**输入**：`update: UserPreferences.() -> UserPreferences`（函数式更新）  
-**输出**：`Result<Unit>`
-
-**逻辑**：
-- 读取当前 preferences
-- 应用 `update` 函数得到新值
-- 调用 `PreferencesRepository.savePreferences(newPreferences)` 写入 DataStore
-- DataStore 变化会自动触发 `GetUserPreferencesUseCase` 的 Flow，UI 自动刷新
-
----
-
-## 5. Repository 接口（PreferencesRepository）
-
-**文件**：`data/repository/PreferencesRepository.kt`
-
-| 方法 | 参数 | 返回 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `observePreferences()` | — | `Flow<UserPreferences>` | DataStore 的 Flow，自动响应变化 |
-| `savePreferences(prefs)` | UserPreferences | `Unit` | 写入 DataStore |
-| `saveTokens(tokens)` | AuthTokens | `Unit` | 加密存储 Token（跨模块调用） |
-| `clearTokens()` | — | `Unit` | 清除 Token |
-| `clearAll()` | — | `Unit` | 注销时清除全部 DataStore 数据 |
-
----
-
-## 6. 在线/离线模式说明
-
-| 模式 | 开/关锁行为 | 当前阶段 |
-| :--- | :--- | :--- |
-| 在线模式（默认） | 必须联网，请求云端加密密文，安全级别最高 | 正常业务流程 |
-| 离线模式（预留） | 跳过云端加密步骤，使用本地预存密钥（降级方案，安全级别降低） | 仅存储字段，流程不改变，后期硬件支持时接入 |
-
-> **注意**：当前阶段开/关锁流程**始终走云端加密**，`onlineModeEnabled` 字段仅供未来离线模式扩展使用，现阶段不影响业务逻辑。
-
----
-
-## 7. 震动反馈触发点
-
-`vibrationEnabled` 字段由原生层读取，在以下时机触发震动（`Vibrator` 或 `VibrationEffect`）：
-- NFC Tag 感应成功（首次建立连接）
-- 开/关锁操作成功
-- 开/关锁操作失败
-
-震动逻辑封装在 `HapticFeedbackHelper`（工具类），读取 DataStore 中的 `vibrationEnabled` 决定是否执行。
-
----
-
-## 8. 边界与异常
-
-| 场景 | 处理 |
-| :--- | :--- |
-| DataStore 读取失败（极罕见） | 使用默认值 `UserPreferences()` 展示，不报错 |
-| 账号注销时网络断开 | 提示"注销失败，请检查网络后重试"；**不清除本地数据**（等成功后再清） |
-| 注销弹窗误触 | 提供 Cancel 按钮关闭弹窗，不触发任何操作 |
-| 登出时无网络 | 允许本地登出（清 Token + 缓存），云端吊销异步发送（失败也无影响，Token 会自然过期） |
+- [ ] 账号注销失败（网络断开）：提示错误，不清除本地数据
+- [ ] 登出时网络失败：允许本地登出，云端吊销异步重试
+- [ ] 设置页在 Token 失效后（强退场景）能正确跳登录页

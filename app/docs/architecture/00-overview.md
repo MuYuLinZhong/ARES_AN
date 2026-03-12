@@ -62,6 +62,8 @@ NAC1080 是一款**无源 NFC 智能锁**。App 的核心职责：
 
 ## 4. 模块文件索引
 
+> **三阶段开发**：各模块参与程度见 [`phases-overview.md`](../phases-overview.md)，各文件内均有「阶段标注」小节。
+
 | 文件 | 模块 | 负责人 / Agent | 依赖模块 |
 | :--- | :--- | :--- | :--- |
 | `01-startup.md` | 启动与路由 | — | 02-auth, 08-storage |
@@ -157,24 +159,41 @@ sealed class UiState<out T> {
 
 ---
 
-## 7. 两阶段实现策略（先假后真）
+## 7. 三阶段开发策略（详见 phases-overview.md）
 
-| 阶段 | 说明 | 改动范围 |
+| 阶段 | 目标 | 改动范围 |
 | :--- | :--- | :--- |
-| 第一阶段（假数据） | 所有 Repository 用 Fake 实现，返回硬写数据。目标：整个 MVVM 流程跑通，进度条状态机走完 | 只改 `RepositoryModule` 绑定 |
-| 第二阶段（真数据） | 逐个将 FakeRepository 换成 RemoteRepository + NfcRepositoryImpl | 只改 `RepositoryModule` 绑定，其他层零改动 |
+| **Phase 1** | 硬件设备调试：本地密钥、直接开/关锁，不涉及登录与云端 | 01 简化、02 不参与、03 本地加密、04 本地设备、08 无 Token、09 stub |
+| **Phase 2** | 云端交互：认证、信息流、存储、完整五步协议 | 全部模块完整实现，替换 stub |
+| **Phase 3** | 端到端验证：断网、Token 失效、权限、审计 | 无 stub，整体验收 |
 
 ---
 
-## 8. 开发推进顺序建议
+## 8. 开发推进顺序建议（按阶段）
 
-| 阶段 | 目标 | 关键任务 |
+### Phase 1：硬件调试
+
+| 顺序 | 目标 | 关键任务 |
 | :--- | :--- | :--- |
-| P0 | 架构骨架 | 目录 + 接口定义 + Hilt 配置 + FakeRepository |
-| P1 | 认证流程 | AuthViewModel + LoginUseCase + WebView 桥登录事件 |
-| P2 | 设备列表 | DeviceListViewModel + 搜索过滤 + Room 缓存 |
-| P3 | 开/关锁核心 | HomeViewModel + 6个锁操作 UseCase + 进度状态机 |
-| P4 | 授权管理 | DeviceDetailViewModel + 邀请/撤销 + 权限感知 |
-| P5 | 设置页 | SettingsViewModel + DataStore 读写 |
-| P6 | 接入真实 API | 逐个替换 FakeRepository → RemoteRepository |
-| P7 | 接入真实 NFC | FakeNfcRepository → NfcRepositoryImpl，联调硬件 |
+| 1 | Phase1 骨架 | 08 简化（无 Token）、12 绑定 Phase1 Repository |
+| 2 | 启动简化 | 01 仅 NFC 检测 → 直接进首页 |
+| 3 | NFC 核心（本地加密） | 03 五步协议，步骤3 用 LocalCryptoRepository |
+| 4 | 设备与桥接 | 04 本地设备列表、07 开锁/关锁子集 |
+| 5 | 设置简化 | 06 仅震动、NFC 灵敏度 |
+
+### Phase 2：云端交互
+
+| 顺序 | 目标 | 关键任务 |
+| :--- | :--- | :--- |
+| 1 | 基础设施完整 | 08 Token 存储、09 网络、11 安全 |
+| 2 | 认证流程 | 01 完整路由、02 登录/登出/Token |
+| 3 | NFC 云端加密 | 03 步骤3 改为 RequestCipherUseCase |
+| 4 | 设备与权限 | 04 云端同步、05 邀请/撤销 |
+| 5 | 设置与桥接 | 06 完整、07 全量接口 |
+
+### Phase 3：端到端验证
+
+| 顺序 | 目标 | 关键任务 |
+| :--- | :--- | :--- |
+| 1 | 异常与安全 | 10 断网、pending_reports、11 完整 |
+| 2 | 整体验收 | 端到端业务流程、边界场景 |

@@ -5,176 +5,307 @@
 
 ---
 
-## 1. 存储体系概览
+## Phase 1：最小存储（设备缓存 + 偏好 + 本地密钥）
 
-| 存储方案 | 用途 | 加密 |
-| :--- | :--- | :--- |
-| **DataStore（Proto）** | Token、用户偏好、标识符 | Token 字段加密（Keystore），偏好明文 |
-| **Room 数据库** | 设备列表缓存、授权用户缓存、待上报队列 | 明文（Token 等敏感数据不进 Room） |
-| **内存（ViewModel StateFlow）** | NFC 操作中的随机数 Challenge、密文、进度 | 不落盘 |
+### 职责范围
 
----
-
-## 2. Room 数据库
-
-**文件**：`data/local/AppDatabase.kt`  
-**数据库名**：`nac1080_db`
-
-### 2.1 表：device_cache
-
-**文件**：`data/local/entity/DeviceEntity.kt` + `data/local/DeviceDao.kt`
-
-| 字段 | 类型 | 约束 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `deviceId` | TEXT | PRIMARY KEY | 硬件唯一 ID |
-| `nickname` | TEXT | NOT NULL | 用户自定义昵称 |
-| `serialNo` | TEXT | NOT NULL | 序列号 |
-| `isValid` | INTEGER | NOT NULL, DEFAULT 1 | 1=权限有效，0=权限已撤销 |
-| `lastSyncAt` | INTEGER | NOT NULL | 最后同步时间戳（ms） |
-
-**DAO 方法**：
-| 方法 | SQL | 说明 |
-| :--- | :--- | :--- |
-| `observeAll()` | `SELECT * FROM device_cache ORDER BY nickname` | Flow，自动推送变化 |
-| `getById(deviceId)` | `SELECT * WHERE deviceId = ?` | 单个设备 |
-| `upsertAll(devices)` | `INSERT OR REPLACE` | 批量更新（网络刷新后调用） |
-| `markInvalid(deviceId)` | `UPDATE SET isValid=0 WHERE deviceId=?` | 权限撤销时调用 |
-| `deleteById(deviceId)` | `DELETE WHERE deviceId=?` | 解绑设备时调用 |
-| `deleteAll()` | `DELETE FROM device_cache` | 登出/注销时清空 |
-
----
-
-### 2.2 表：authorized_user_cache
-
-**文件**：`data/local/entity/AuthorizedUserEntity.kt` + `data/local/AuthorizedUserDao.kt`
-
-| 字段 | 类型 | 约束 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | 自增主键 |
-| `userId` | TEXT | NOT NULL | 被授权用户 ID |
-| `deviceId` | TEXT | NOT NULL | 关联设备 ID（外键逻辑） |
-| `name` | TEXT | NOT NULL | 用户名 |
-| `phone` | TEXT | NOT NULL | 手机号（存脱敏后的值） |
-| `role` | TEXT | NOT NULL | "Owner" 或 "Guest" |
-| `lastSyncAt` | INTEGER | NOT NULL | 最后同步时间戳 |
-
-**索引**：在 `(deviceId)` 上建立索引，加快按设备查询。
-
-**DAO 方法**：
-| 方法 | 说明 |
+| 职责 | 说明 |
 | :--- | :--- |
-| `observeByDevice(deviceId)` | Flow，某设备授权用户列表 |
-| `replaceForDevice(deviceId, users)` | 整体替换某设备的授权用户（先 DELETE 再 INSERT） |
-| `deleteByDevice(deviceId)` | 解绑设备时清除相关授权 |
-| `deleteAll()` | 登出/注销时清空 |
+| `device_cache` 表 | 存储本地调试设备列表 |
+| DataStore 偏好 | 震动开关、NFC 灵敏度 |
+| 本地加密密钥 | 存储 Phase 1 NFC 调试密钥（明文，仅调试） |
+| **跳过** | `authorized_user_cache` 表、`pending_reports` 表、Token 加密存储 |
 
----
+### 存储分层图
 
-### 2.3 表：pending_reports
+```mermaid
+flowchart TD
+    subgraph mem [内存层]
+        A[HomeViewModel StateFlow\nchallenge / cipher / progress]
+    end
 
-**文件**：`data/local/entity/PendingReportEntity.kt` + `data/local/PendingReportDao.kt`
+    subgraph ds [DataStore 层]
+        B["Phase 1 UserPrefs\n振动开关 vibration_enabled\nNFC 灵敏度 nfc_sensitivity\n本地密钥 local_device_key_hex"]
+        C["Phase 2+ 新增\nencrypted_access_token\nencrypted_refresh_token\ntoken_iv\nlast_logged_in_user_id"]
+    end
 
-| 字段 | 类型 | 约束 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `operationId` | TEXT | PRIMARY KEY | 唯一操作ID（由 HomeViewModel 生成 UUID） |
-| `deviceId` | TEXT | NOT NULL | 操作的设备 ID |
-| `operationType` | TEXT | NOT NULL | "Unlock" 或 "Lock" |
-| `result` | TEXT | NOT NULL | "Cancelled" / "NetworkError" / "NfcError" |
-| `failedAtStep` | INTEGER | NOT NULL | 失败时所处步骤（1-5） |
-| `createdAt` | INTEGER | NOT NULL | 写入时间戳（ms） |
-| `retryCount` | INTEGER | NOT NULL, DEFAULT 0 | 已重试次数 |
-| `status` | TEXT | NOT NULL, DEFAULT 'pending' | "pending" / "sent" / "expired" |
+    subgraph room [Room 数据库层]
+        D["device_cache 表\nPhase 1 启用"]
+        E["authorized_user_cache 表\nPhase 2 启用"]
+        F["pending_reports 表\nPhase 3 启用"]
+    end
 
-**DAO 方法**：
-| 方法 | 说明 |
-| :--- | :--- |
-| `insert(report)` | 中止时写入 |
-| `getPending()` | 查询所有 status='pending' 的记录 |
-| `markSent(operationId)` | 上报成功后删除或标记 |
-| `markExpired(operationId)` | 超过72小时标记过期 |
-| `deleteAll()` | 登出/注销时清空 |
+    mem -. 不落盘 .- ds
+    ds --- room
+```
 
----
+### Phase 1 精简 Proto 定义
 
-## 3. DataStore（Proto DataStore）
-
-**文件**：`data/local/DataStorePreferencesRepository.kt`  
-**Proto 文件**：`app/src/main/proto/user_prefs.proto`
-
-### 3.1 Proto 字段定义
+**文件**：`app/src/main/proto/user_prefs.proto`
 
 ```protobuf
+syntax = "proto3";
+option java_package = "com.example.all";
+option java_multiple_files = true;
+
+// Phase 1 精简版：无 Token 字段
 message UserPrefs {
-  bytes encrypted_access_token  = 1;   // 加密后的 AccessToken 字节
-  bytes encrypted_refresh_token = 2;   // 加密后的 RefreshToken 字节
-  bytes token_iv                = 3;   // AES-GCM 加密用的 IV
-  bool  online_mode_enabled     = 4;   // 在线模式开关
-  bool  vibration_enabled       = 5;   // 震动反馈开关
-  string nfc_sensitivity        = 6;   // "High" / "Medium" / "Low"
-  string last_logged_in_user_id = 7;   // 上次登录的用户ID（用于后续登录快速匹配缓存）
+  bool   vibration_enabled  = 1;   // 震动反馈开关，默认 true
+  string nfc_sensitivity    = 2;   // "High" / "Medium" / "Low"，默认 "Medium"
+  string local_device_key_hex = 3; // Phase 1 调试密钥（十六进制字符串）
+                                   // ⚠️ 仅调试用，Phase 2 删除此字段
+  // Phase 2+ 添加：
+  // bytes  encrypted_access_token  = 4;
+  // bytes  encrypted_refresh_token = 5;
+  // bytes  token_iv                = 6;
+  // string last_logged_in_user_id  = 7;
 }
 ```
 
-> **说明**：Token 使用 Android Keystore 生成的 AES-GCM 密钥加密，`encrypted_*_token` 存密文字节，`token_iv` 存每次加密生成的随机 IV（IV 明文存储是安全的，密钥在 Keystore 中）。加密细节见 `11-security.md`。
+### Phase 1 Room 表：device_cache
 
-### 3.2 DataStore 读写规范
+**文件**：`data/local/entity/DeviceEntity.kt`
 
-- **读取**：通过 `dataStore.data` 返回 `Flow<UserPrefs>`，ViewModel 通过 `collectAsState` 响应变化
-- **写取 Token**：每次写入前生成新的随机 IV，加密后连同 IV 一起写入
-- **清除 Token**：将 `encrypted_access_token` 和 `encrypted_refresh_token` 设为空字节数组，`token_iv` 清空
+```kotlin
+@Entity(tableName = "device_cache")
+data class DeviceEntity(
+    @PrimaryKey val deviceId: String,
+    val nickname: String,
+    val serialNo: String,
+    val isValid: Int = 1,         // 1=有效，0=撤销（Phase 2 使用）
+    val lastSyncAt: Long = System.currentTimeMillis()
+)
+```
+
+**DeviceDao**：
+
+```kotlin
+@Dao
+interface DeviceDao {
+    @Query("SELECT * FROM device_cache ORDER BY nickname")
+    fun observeAll(): Flow<List<DeviceEntity>>
+
+    @Query("SELECT * FROM device_cache WHERE deviceId = :id")
+    suspend fun getById(id: String): DeviceEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(devices: List<DeviceEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(device: DeviceEntity)
+
+    @Query("UPDATE device_cache SET isValid = 0 WHERE deviceId = :id")
+    suspend fun markInvalid(id: String)
+
+    @Query("DELETE FROM device_cache WHERE deviceId = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM device_cache")
+    suspend fun deleteAll()
+}
+```
+
+### 实现规格
+
+#### DataStorePreferencesRepository（Phase 1 精简版）
+
+```kotlin
+class DataStorePreferencesRepository @Inject constructor(
+    private val dataStore: DataStore<UserPrefs>
+) : PreferencesRepository {
+
+    override fun observePreferences(): Flow<UserPreferences> =
+        dataStore.data.map { prefs ->
+            UserPreferences(
+                vibrationEnabled  = prefs.vibrationEnabled,
+                nfcSensitivity    = NfcSensitivity.fromString(prefs.nfcSensitivity)
+                // onlineModeEnabled: Phase 2 启用
+            )
+        }
+
+    override suspend fun savePreferences(prefs: UserPreferences) {
+        dataStore.updateData { current ->
+            current.toBuilder()
+                .setVibrationEnabled(prefs.vibrationEnabled)
+                .setNfcSensitivity(prefs.nfcSensitivity.name)
+                .build()
+        }
+    }
+
+    // Phase 1 专用：读取本地调试密钥
+    suspend fun getLocalDeviceKey(): String =
+        dataStore.data.first().localDeviceKeyHex
+
+    // Phase 1 专用：写入本地调试密钥（调试工具页面调用）
+    suspend fun setLocalDeviceKey(keyHex: String) {
+        dataStore.updateData { it.toBuilder().setLocalDeviceKeyHex(keyHex).build() }
+    }
+
+    // Phase 2+ 方法：stub
+    override suspend fun saveTokens(tokens: AuthTokens) {
+        // TODO("Phase 2: 使用 KeystoreManager 加密后写入 DataStore")
+    }
+
+    override suspend fun clearTokens() {
+        // TODO("Phase 2: 清除 DataStore 中的 Token 字段")
+    }
+
+    override suspend fun clearAll() {
+        // TODO("Phase 2: 清除所有 DataStore 字段")
+    }
+}
+```
+
+### 验收要点
+
+- [ ] `device_cache` 表正常读写（Phase 1 设备列表可展示）
+- [ ] DataStore 偏好（震动、NFC 灵敏度）能持久化
+- [ ] 本地密钥能从 DataStore 读取，供 `LocalCryptoRepository` 使用
+- [ ] App 重启后偏好不丢失
 
 ---
 
-## 4. 数据安全分级
+## Phase 2：完整存储（Token 加密 + 授权用户缓存）
 
-| 数据类型 | 存储位置 | 是否加密 | 理由 |
-| :--- | :--- | :--- | :--- |
-| AccessToken / RefreshToken | DataStore | ✅ AES-GCM + Keystore | 核心凭证，泄漏即账号被控制 |
-| NFC 随机数 Challenge | 内存（协程变量） | 不落盘 | 使用后即销毁，防重放攻击 |
-| NFC 密文 | 内存（协程变量） | 不落盘 | 同上 |
-| 设备缓存 | Room 明文 | ❌ | 非敏感，deviceId 和昵称不构成安全风险 |
-| 授权用户缓存 | Room 明文 | ❌ | 手机号脱敏存储（只存后四位明文） |
-| 用户偏好 | DataStore 明文 | ❌ | 非敏感配置 |
+### 新增 / 变更说明
+
+| 变更项 | Phase 1 | Phase 2 |
+| :--- | :--- | :--- |
+| DataStore Token 字段 | 无 | `encrypted_access_token` / `encrypted_refresh_token` / `token_iv` |
+| Token 存储方式 | 无 | AES-GCM + Android Keystore 加密 |
+| `authorized_user_cache` 表 | 无 | 建立，用于设备详情授权用户展示 |
+| `local_device_key_hex` 字段 | 存在（调试） | 移除 |
+
+### 完整 Proto 定义（Phase 2）
+
+```protobuf
+message UserPrefs {
+  bytes  encrypted_access_token  = 1;
+  bytes  encrypted_refresh_token = 2;
+  bytes  token_iv                = 3;
+  bool   vibration_enabled       = 4;
+  bool   online_mode_enabled     = 5;
+  string nfc_sensitivity         = 6;
+  string last_logged_in_user_id  = 7;
+}
+```
+
+### authorized_user_cache 表
+
+```kotlin
+@Entity(tableName = "authorized_user_cache",
+        indices = [Index("deviceId")])
+data class AuthorizedUserEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val userId: String,
+    val deviceId: String,
+    val name: String,
+    val phone: String,   // 脱敏后的值（后四位）
+    val role: String,    // "Owner" / "Guest"
+    val lastSyncAt: Long
+)
+```
+
+### 缓存策略
+
+#### Cache-Then-Network（设备列表）
+
+```mermaid
+flowchart LR
+    A[进入设备列表] --> B[立即读 Room 缓存\n0等待，先展示]
+    B --> C[同时后台请求\nGET /devices]
+    C -- 成功 --> D[upsertAll → Room Flow\n触发 UI 自动刷新]
+    C -- 失败 --> E[保持缓存 + isOffline=true 横幅]
+```
+
+#### Network-First（授权用户列表）
+
+```
+进入设备详情 → 先展示 Room 缓存设备基本信息
+             → 同时请求 GET /devices/{id}/users
+               成功 → replaceForDevice() → 最新授权列表
+               失败 → Room 缓存 + 错误提示
+```
+
+### 验收要点
+
+- [ ] AccessToken / RefreshToken 加密存储（Keystore AES-GCM）
+- [ ] Token 在不同设备间无法解密
+- [ ] `authorized_user_cache` 按 deviceId 正确增删
+- [ ] 登出时三表全部清空
 
 ---
 
-## 5. 缓存策略
+## Phase 3：缓存时效规则
 
-### 5.1 Cache-Then-Network（设备列表）
-```
-进入设备列表页
-  ↓
-立即读取 Room device_cache → 展示给用户（0等待）
-  ↓ 同时后台
-发起网络请求 GET /devices
-  成功 → upsertAll(newDevices) → Room Flow 触发 UI 更新
-  失败 → 保持现有缓存展示 + isOffline=true 横幅
-```
+### 新增 / 变更说明
 
-### 5.2 Network-First（设备详情授权用户）
-```
-进入设备详情页
-  ↓
-先读 Room device_cache 展示设备基本信息
-  ↓ 同时
-发起网络请求 GET /devices/{id}/users（授权用户变化频繁，优先最新数据）
-  成功 → replaceForDevice() → 展示最新授权用户列表
-  失败 → 读 Room authorized_user_cache 展示 + 错误提示
-```
+| 新增项 | 说明 |
+| :--- | :--- |
+| 缓存有效期校验 | `lastSyncAt` 距今超阈值则限制操作 |
+| `pending_reports` 表 | 建立，Phase 3 写入中断操作记录 |
 
-### 5.3 缓存有效期规则
+### 缓存有效期规则
+
 | `lastSyncAt` 距今 | 行为 |
 | :--- | :--- |
-| < 24 小时 | 正常展示，无额外提示 |
-| 24 小时 ~ 7 天 | 设备名旁显示"⚠ 数据较旧" |
-| > 7 天 | 禁用开锁操作按钮，提示"数据已过期，请联网刷新" |
+| < 24 小时 | 正常展示 |
+| 24h ～ 7天 | 设备名旁显示"⚠ 数据较旧" |
+| > 7 天 | 禁用操作按钮，提示"数据已过期，请联网刷新" |
+
+### pending_reports 表
+
+```kotlin
+@Entity(tableName = "pending_reports")
+data class PendingReportEntity(
+    @PrimaryKey val operationId: String,
+    val deviceId: String,
+    val operationType: String,   // "Unlock" / "Lock"
+    val result: String,          // "Cancelled" / "NetworkError" / "NfcError"
+    val failedAtStep: Int,
+    val createdAt: Long,
+    val retryCount: Int = 0,
+    val status: String = "pending"  // "pending" / "sent" / "expired"
+)
+```
+
+### 验收要点
+
+- [ ] `pending_reports` 写入、消费、幂等性验证
+- [ ] 超 7 天缓存时操作按钮禁用，提示正确
 
 ---
 
-## 6. Room Schema 迁移策略
+## 各模块读写关系图
 
-- 每次改动 Room 实体，**必须**在 `AppDatabase` 中增加 `MIGRATION_X_Y`
-- 迁移原则：**宁可清空缓存重建，也不让 App 崩溃**
-  - 非必要字段新增：`ALTER TABLE ADD COLUMN ... DEFAULT ...`
-  - 表结构大变：`DROP TABLE + CREATE TABLE + 清空旧缓存`（缓存可从云端重拉，不是核心资产）
-- `fallbackToDestructiveMigration()` 作为最终兜底（只在开发测试阶段允许，生产不可用）
+```mermaid
+flowchart LR
+    subgraph vm [ViewModel 层]
+        HVM[HomeViewModel]
+        DVM[DeviceListViewModel]
+        AVM[AuthViewModel]
+        SVM[SettingsViewModel]
+    end
+
+    subgraph ds [DataStore]
+        TP[Token\nPhase2+]
+        PP[Preferences\nPhase1+]
+        LK[LocalKey\nPhase1]
+    end
+
+    subgraph room [Room]
+        DC[device_cache]
+        AU[authorized_user_cache\nPhase2+]
+        PR[pending_reports\nPhase3]
+    end
+
+    HVM -- 写 pending --> PR
+    HVM -- 读 isValid --> DC
+    DVM -- 读写 --> DC
+    DVM -- 读 --> AU
+    AVM -- 读写 Token --> TP
+    SVM -- 读写 --> PP
+    SVM -- 登出清空 --> DC
+    SVM -- 登出清空 --> AU
+    SVM -- 登出清空 --> PR
+```

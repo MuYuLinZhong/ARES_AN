@@ -1,0 +1,139 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Smack-SL Debugging",
+      "type": "gnu-debugger",
+      "request": "launch",
+      "program": "${workspaceRoot}/smack_sl/build/image/image_nvm.elf",
+      "toolchain": "${workspaceRoot}/tools/extern/gcc-arm-none-eabi/bin",
+      "client": "arm-none-eabi-gdb",
+      "server": "JLinkGDBServer",
+      "windows": {
+        "server": "C:/Program Files (x86)/SEGGER/JLink/JLinkGDBServerCL.exe",
+        "serverHost": "localhost"
+      },
+      "serverArgs": [
+        "-device",
+        "NAC1080",
+        "-if",
+        "SWD",
+        "-speed",
+        "15000",
+        "-endian",
+        "little",
+        "-singlerun",
+        "-strict",
+        "-timeout",
+        "10000",
+        "-nogui",
+        "-ir",
+        "-nosilent",
+        "-halt",
+        "-JLinkDevicesXMLPath",
+        "${workspaceRoot}/tool_config/jlink"
+      ],
+      "serverPort": 2331,
+      "customVariables": [
+        "port0",
+        "port1",
+        "port2",
+      ],
+      "autoRun": false,
+      "clientArgs": [],
+      "debugOutput": true,
+      "preLaunchTask": "all"
+      // "preLaunchTask": ""
+    },
+    {
+      "name": "Smack-SL nohalt Debugging",
+      "type": "gnu-debugger",
+      "request": "launch",
+      "program": "${workspaceRoot}/smack_sl/build/image/image_nvm.elf",
+      "toolchain": "${workspaceRoot}/tools/extern/gcc-arm-none-eabi/bin",
+      "client": "arm-none-eabi-gdb",
+      "server": "JLinkGDBServer",
+      "windows": {
+        "server": "C:/Program Files (x86)/SEGGER/JLink/JLinkGDBServerCL.exe",
+        "serverHost": "localhost"
+      },
+      "serverArgs": [
+        "-device",
+        "NAC1080",
+        "-if",
+        "SWD",
+        "-speed",
+        "15000",
+        "-endian",
+        "little",
+        "-singlerun",
+        "-strict",
+        "-timeout",
+        "10000",
+        "-nogui",
+        "-noir",
+        "-nosilent",
+        "-nohalt",
+        "-JLinkDevicesXMLPath",
+        "${workspaceRoot}/tool_config/jlink"
+      ],
+      "serverPort": 2331,
+      "customVariables": [
+        "port0",
+        "port1",
+        "port2",
+      ],
+      "autoRun": false,
+      "clientArgs": [],
+      "debugOutput": true,
+      "preLaunchTask": "all"
+      // "preLaunchTask": ""
+    },
+    {
+      "name": "Smack-ROM Debugging",
+      "type": "gnu-debugger",
+      "request": "launch",
+      "program": "${workspaceRoot}/smack_rom/build/image/image_rom.elf",
+      "toolchain": "${workspaceRoot}/tools/extern/gcc-arm-none-eabi/bin",
+      "client": "arm-none-eabi-gdb",
+      "server": "JLinkGDBServer",
+      "windows": {
+        "server": "C:/Program Files (x86)/SEGGER/JLink/JLinkGDBServerCL.exe",
+        "serverHost": "localhost"
+      },
+      "serverArgs": [
+        "-device",
+        "NAC1080",
+        "-if",
+        "SWD",
+        "-speed",
+        "15000",
+        "-endian",
+        "little",
+        "-singlerun",
+        "-strict",
+        "-timeout",
+        "10000",
+        "-nogui",
+        "-noir",
+        "-nosilent",
+        "-nohalt",
+        "-JLinkDevicesXMLPath",
+        "${workspaceRoot}/tool_config/jlink"
+      ],
+      "serverPort": 2331,
+      "customVariables": [
+        "port0",
+        "port1",
+        "port2",
+      ],
+      "autoRun": false,
+      "debugOutput": false,
+      "preLaunchTask": "all"
+      // "preLaunchTask": ""
+    }
+  ]
+}

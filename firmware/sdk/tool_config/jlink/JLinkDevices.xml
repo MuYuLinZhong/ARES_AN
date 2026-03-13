@@ -1,0 +1,22 @@
+<DataBase>
+  <!--                 -->
+  <!-- Infineon Smack  -->
+  <!--                 -->
+  <!--                 -->
+  <Device>
+    <ChipInfo Vendor="Infineon" Name="NAC1080" Core="JLINK_CORE_CORTEX_M0" WorkRAMAddr="0x00020800" WorkRAMSize="0x0800"/>
+    <FlashBankInfo Name="NVM CODE"   BaseAddr="0x00010000" MaxSize="0xf000" Loader="image_ram.elf" LoaderType="FLASH_ALGO_TYPE_OPEN" AlwaysPresent="1"/>
+  </Device>
+  <Device>
+    <ChipInfo Vendor="Infineon" Name="NAC1081" Core="JLINK_CORE_CORTEX_M0" WorkRAMAddr="0x00020800" WorkRAMSize="0x0800"/>
+    <FlashBankInfo Name="NVM CODE"   BaseAddr="0x00010000" MaxSize="0xf000" Loader="image_ram.elf" LoaderType="FLASH_ALGO_TYPE_OPEN" AlwaysPresent="1"/>
+  </Device>
+  <Device>
+    <ChipInfo Vendor="Infineon" Name="NGC1081" Core="JLINK_CORE_CORTEX_M0" WorkRAMAddr="0x00020800" WorkRAMSize="0x0800"/>
+    <FlashBankInfo Name="NVM CODE"   BaseAddr="0x00010000" MaxSize="0xf000" Loader="image_ram.elf" LoaderType="FLASH_ALGO_TYPE_OPEN" AlwaysPresent="1"/>
+  </Device>
+  <Device>
+    <ChipInfo Vendor="Infineon" Name="Smack" Core="JLINK_CORE_CORTEX_M0" WorkRAMAddr="0x00020800" WorkRAMSize="0x0800"/>
+    <FlashBankInfo Name="NVM CODE"   BaseAddr="0x00010000" MaxSize="0xf000" Loader="image_ram.elf" LoaderType="FLASH_ALGO_TYPE_OPEN" AlwaysPresent="1"/>
+  </Device>
+</DataBase>

@@ -1,0 +1,24 @@
+# ignore all (!) directories called 'build' from here on downwards ...
+build/
+build_dparam/
+# .settings is an Eclipse-owned directory and is local to every user => tell git to ignore it everywhere
+.settings/
+common/scripts/elftools/
+/smack*/commit_id
+# .idea is Pycharm-ownde and local to every user
+scripts/.idea/
+.idea
+#.project
+#.cproject
+scripts/aparams_generated.xml
+t32_user_startup.s
+t32_start.manuel.bat
+tools/intern/DP_reg_tool/last_register.xml
+tools/intern/DP_reg_tool/XML_debug.xml
+sandbox/
+/tools/intern/SmackEvalTool/SmackEvalTool/dist/
+/bin/
+*.bak
+*.pyc
+*.jdebug
+*.jdebug.user

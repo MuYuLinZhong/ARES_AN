@@ -1,15 +1,27 @@
+# Android build artifacts
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
+.gradle/
+.kotlin/
+local.properties
+build/
+captures/
 .externalNativeBuild
 .cxx
-local.properties
+.DS_Store
+
+# IDE
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Firmware build
+firmware/nac1080_lock/build/
+
+# Node modules (app web frontend)
+node_modules/
+
+# Reference extracted sources (large, can regenerate)
+reference/smack-sdk/_sources_extracted/

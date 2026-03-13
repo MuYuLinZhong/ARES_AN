@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NFC 技术过滤器：声明本应用支持的 NFC 技术类型 -->
+<!-- NfcA 对应 ISO 14443-3A 协议，是 SmAcK SDK 使用的通信协议 -->
+<!-- IsoDep 保留用于向后兼容 -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <tech-list>
+        <tech>android.nfc.tech.NfcA</tech>
+    </tech-list>
+    <tech-list>
+        <tech>android.nfc.tech.IsoDep</tech>
+    </tech-list>
+</resources>

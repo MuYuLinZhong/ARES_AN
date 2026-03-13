@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- NFC 技术过滤器：声明本应用支持的 NFC 技术类型 -->
-<!-- IsoDep 对应 ISO 14443-4 协议，是 NAC1080 无源锁使用的通信协议 -->
-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <tech-list>
-        <tech>android.nfc.tech.IsoDep</tech>
-    </tech-list>
-</resources>

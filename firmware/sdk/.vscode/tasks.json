@@ -1,0 +1,80 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "all",
+			"command": "./run_task.bat",
+			"args": [
+				"make all"
+			],
+			"options": {
+				"cwd": "${workspaceRoot}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				// Reveal the output only if unrecognized errors occur.
+				"echo": true,
+				"focus": false,
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "shell",
+			"label": "clean",
+			"command": "./run_task.bat",
+			"args": [
+				"make clean"
+			],
+			"options": {
+				"cwd": "${workspaceRoot}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				// Reveal the output only if unrecognized errors occur.
+				"echo": true,
+				"focus": false,
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "shell",
+			"label": "package_rtlsim",
+			"command": "./run_task.bat",
+			"args": [
+				"make package_rtlsim"
+			],
+			"options": {
+				"cwd": "${workspaceRoot}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				// Reveal the output only if unrecognized errors occur.
+				"echo": true,
+				"focus": false,
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}

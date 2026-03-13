@@ -1,0 +1,32 @@
+Installation:
+1) Download Doxygen from doxygen.nl:
+	http://doxygen.nl/files/doxygen-1.8.18.windows.x64.bin.zip
+2) Extract the zip file's contents to the folder:
+	dandelion\tools\extern\doxygen
+	After extraction the folder should contain the file "doxygen.exe"
+
+Running Doxygen:
+1) within Windows Powershell navigate to the following folder:
+	dandelion\smack_rom
+2) execute Doxygen using the following command:
+	..\tools\extern\doxygen\doxygen.exe ..\tool_config\doxygen\Doxyfile
+3) Open the generated documentation:
+	dandelion\smack_rom\html\index.html
+
+Writing Doxygen Documentation:
+1) For an in-depth explanation look at:
+	https://www.doxygen.nl/manual/docblocks.html
+2) TLDR:
+	- Doxygen comment before the object you want to document:
+		/**
+		 * documentation
+		*/
+		void foo(uint32_t bar);
+	- Doxygen comment after the object you want to document:
+		uint32_t foobar; //!< documentation
+	- To mark a block of a doxygen comment a short (1-2 short sentences) explanation, put "@brief" in front of it.
+	- To mark a block of a doxygen comment as an explanation of the return value, put "@return" in front of it.
+	- To explain an input parameter through a doxgen comment, put "@param PARAMETER_NAME" in front of the comment.
+	
+	- For examples look at the following file:
+		dandelion\smack_rom\libs\smack_lib\inc\dand_handler.h

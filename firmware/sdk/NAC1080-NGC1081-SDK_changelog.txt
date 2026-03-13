@@ -1,0 +1,109 @@
+NAC1080/NGC1081 SDK 2.1
+=======================
+
+Changes from SDK 2.0:
+---------------------
+
+Updates in smack_rom (ROM library):
+
+dparam.h:
+- change "cal_stb_osc" to uint32_t
+  This field holds the frequency of the standby oscillator as measured during chip production (slow clock,
+  typically 32678Hz). This value is loaded into the RTC by rtc_init() and rtc_init_lib() to enhance the
+  accuracy of the RTC's second counter when running on the internal oscillator.
+  The file "default_dparam.c" reflects this change.
+
+event.h:
+- new file with event codes that are used when configuring interrupts in new NVM lib functions
+
+gpio.h:
+- provide alternate prototypes for GPIO functions
+
+sense_ctrl.h:
+- added a comment how to configure interrupts during ADC conversions
+
+
+Updates in smack_lib (NVM library):
+
+General remark:
+Several library updates that where previously distributed in other directories, such as the UART driver,
+have been merged into the smack_lib directory. Prototypes and other definitions may have moved to
+different header files or may have been renamed.
+
+aes_lib.h:
+- random number functions reworked for better results
+- additional functions so that the user can select between faster exectuion or better performance
+
+gpio_lib.h:
+- new file with functions to support interrupt configuration
+
+hbctrl_lib.h:
+- provide hb_config_set_lib() as alternative to set_hb_config() of ROM library
+
+i2c_lib.h:
+- I2C driver for the hardware I2C controller of the NGC1081
+
+nfc_lib.h
+- control energy harvesting
+- read NFC field status
+
+nvm_lib.h:
+- alternate implementation of the NVM driver
+- alternate prototypes with different naming schemes
+
+ring_buffer.h:
+- ring buffer implementation, used by UART driver
+
+rtc_lib.h:
+- alternate implementation of RTC functions.
+  If an external 32kHz crystal is connected to the NGC1081, please use these functions to control the RTC.
+
+sense_lib.h:
+- convert raw value of temperature sensore to physical units
+
+ssp_lib.h:
+- SPI driver with master mode support
+
+sys_tim_lib.h:
+- functions for interrupt generation
+- PWM control of H-bridge
+
+system_lib.h:
+- alternate implementation of request_power_saving_mode() of the ROM library.
+- write to and read from standby scratch pad register
+- access high priority interrupt matrix
+
+uart_lib.h:
+- UART driver for character streams (interrupt driven)
+
+wdt_lib.h:
+- alternate implementation of the ROM library's functions with same functionality
+
+
+Updates in smack_sl (demo project):
+
+sl_aparam.c:
+- apply restrictions on some of the protection privileges
+
+smack_sl.c:
+- update some comments
+
+startup_smack.c:
+- add comment regarding copy of vector table
+
+
+Updates to toolchain:
+
+gcc_compile.mk:
+- fix issue with partially erased build directories
+
+Lauterbach debugger:
+- Update flash driver (image_ram.bin)
+- Fix loading of DPARAM on restarts from GUI
+
+J-Link debugger:
+- Update flash drivers (image_ram.elf)
+- Add directory "JLinkDevices" in tool_config\jlink
+  Copy this folder to "C:\Users\<USER>\AppData\Roaming\SEGGER" to add the 
+  NAC1080/NGC1081 configuration to the J-Link driver's database to use it
+  in other J-Link applications outside of the SDK.

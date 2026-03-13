@@ -1,0 +1,54 @@
+// T32 Thu Jul 14 13:20:23 2016
+
+print "Entering'"+os.ppf()+"'"
+
+entry &per_file
+
+ B::
+
+ TOOLBAR ON
+ STATUSBAR ON
+ FramePOS 29.125 8.6429 209. 62.
+ WinPAGE.RESet
+ 
+ WinPAGE.Create P000
+ 
+ WinCLEAR
+ WinPOS 133.63 46.286 71. 12. 0. 0. W002
+ register
+ 
+ WinPOS 0.0 0.0 129. 14. 0. 0. W000
+ area
+ 
+ WinPOS 0.0 18.214 129. 38. 16. 1. W001
+ WinTABS 10. 10. 25. 62.
+ list
+ 
+ WinPOS 133.63 0.0 73. 11. 0. 0. W003
+ per
+ 
+ WinPOS 133.63 15.286 71. 28. 0. 0. W004
+ per &per_file
+
+ WinPOS 133.75 31.857 71. 12. 0. 0. W005
+ Var.Watch
+
+ if (symbol.exist(currstate))
+ (
+  VAR.ADDWATCH currstate
+ )
+ if (symbol.exist(frame))
+ (
+  VAR.ADDWATCH frame
+ )
+ if (symbol.exist(ret_frame))
+ (
+  VAR.ADDWATCH ret_frame
+ )
+ 
+ WinPAGE.select P000
+ 
+print "Leaving'"+os.ppf()+"'"
+
+ ENDDO
+

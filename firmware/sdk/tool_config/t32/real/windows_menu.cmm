@@ -1,0 +1,40 @@
+; ============================================================================
+; Copyright (c) 2021 Infineon Technologies AG
+;               All rights reserved.
+;               www.infineon.com
+; ============================================================================
+;
+; ============================================================================
+; Redistribution and use of this software only permitted to the extent
+; expressly agreed with Infineon Technologies AG.
+; ============================================================================
+
+; print currently executed file name into output window
+print "Entering '"+os.ppf()+"'"
+
+local &window_menu_script &curr_dir
+&window_menu_script=os.ppf()
+&curr_dir=os.ppd()
+
+; fetch script arguments
+entry &startup_script &rom_elf_filename &nvm_elf_filename &window_pos_script &user_setup_script &per_file &nvm_binary &do_not_load_menu_again &dparam_elf_filename
+
+; add button to reset, reload window settings and download FW
+menu.addtool "Target reset + FW load" "RS,R" "do &startup_script &rom_elf_filename &nvm_elf_filename &window_pos_script &window_menu_script &user_setup_script &per_file &nvm_binary &do_not_load_menu_again &dparam_elf_filename"
+
+; add button to disconnect the debugger from target
+menu.addtool "Target lock = disable SPD link" "TL,R" "system.lock on"
+; add button to connect the debugger from target
+menu.addtool "Target unlock = enable SPD link" "TU,R" "system.lock off"
+
+; add button to send target into burst
+;menu.addtool "Trigger Burst Mode" "BM,R" "var.set burst_entry_trigger = 1"
+
+; add button to disconnect Debugger
+menu.addtool "Debugger Disconnect" "ND,B" "do &curr_dir\debugger_detach.cmm"
+
+; add button to connect Debugger
+menu.addtool "Debugger Attach" "AT,B" "do &curr_dir\debugger_attach.cmm"
+
+print "Leaving '"+os.ppf()+"'"
+enddo

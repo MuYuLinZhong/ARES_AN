@@ -1,0 +1,355 @@
+/* ============================================================================
+** Copyright (c) 2021 Infineon Technologies AG
+**               All rights reserved.
+**               www.infineon.com
+** ============================================================================
+**
+** ============================================================================
+** Redistribution and use of this software only permitted to the extent
+** expressly agreed with Infineon Technologies AG.
+** ============================================================================
+*
+*/
+
+/**
+ * @file    sl_aparam.c
+ * @brief   Placeholder for application/customer specific aparams in NVM.
+ */
+
+/*
+==============================================================================
+   1. INCLUDE FILES
+==============================================================================
+*/
+
+#include "cmsis_compiler.h"
+#include "aparam.h"
+#include "nvm_params.h"
+#include "smack_sl.h"
+#include "aes_lib.h"
+#include "smack_exchange.h"
+
+/**
+ * @defgroup group_aparam_variables APARAM variables
+ * @ingroup group_aparam_interface
+ * @{
+ */
+/// @}
+
+// Following default APARAM structure must be placed after the DPARAMS at beginning of NVM memory.
+// See the linker script for details.
+// Initialization of NVM is done by customer initiated NVM programming
+// Fields that are not used shall be set to all ones (value of an erased NVM).
+Aparams_t const aparams __attribute__ ((section (".nvm.APARAMS"))) =
+{
+    .prot_rom1 =                                               /**< [0x403:0x400] (32) ROM1/ROM2/RAM1/RAM2 protection privilegs      */
+    nvm_prot_no_access,
+    .prot_rom2 =                                               /**< [0x403:0x400] (32) ROM1/ROM2/RAM1/RAM2 protection privilegs      */
+    nvm_prot_no_access,
+    .prot_ram1 =                                               /**< [0x403:0x400] (32) ROM1/ROM2/RAM1/RAM2 protection privilegs      */
+    nvm_prot_no_access,
+    .prot_ram2 =                                               /**< [0x403:0x400] (32) ROM1/ROM2/RAM1/RAM2 protection privilegs      */
+    nvm_prot_no_access,
+    .prot_hw1 =                                                /**< [0x407:0x404] (32) HW1/HW2/HW3 protection privilegs              */
+    nvm_prot_no_access,
+    .prot_hw2 =                                                /**< [0x407:0x404] (32) HW1/HW2/HW3 protection privilegs              */
+    nvm_prot_no_access,
+    .prot_hw3 =                                                /**< [0x407:0x404] (32) HW1/HW2/HW3 protection privilegs              */
+    nvm_prot_no_access,
+    .prot_rfu =                                                /**< [0x407:0x404] (32) HW1/HW2/HW3 protection privilegs              */
+    nvm_prot_no_access,
+
+    .app_prog =                                                /**< [0x447:0x408] (32 * 16) absolute address App function 0 through 15 */
+    {
+        (param_func_ptr_t)smack_exchange_handler,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff,
+        0xffffffff
+    },
+
+    .bypass_mailbox =                                          /**< [0x44b:0x448] (32) BYPASS_MAILBOX (0xfca1fcb0) will bypass mailbox address check */
+    0xffffffff,
+
+    .default_uart_baudrate =                                   /**< [0x44f:0x44c] (24) default UART baudrate in baud                 */
+    0xffffffff,
+
+    .kill_debugger =                                           /**< [0x453:0x450] (32) DEBUGGER_OFF (0x5deb0ff5) will block debugger access          */
+    0xffffffff,
+
+    .disable_default_uart =                                    /**< [0x457:0x454] (32) DISABLE_DEFAULT_UART (0x11223344) disable UART per ROM code   */
+    0xffffffff,
+
+    .message_disable =                                         /**< [0x0x45b:0x458] (32) 0x11E550FF ignore external send message req */
+    0x11E550FF,
+
+    .rfu0 =                                                    /**< [0x47f:0x45C] (288) reserved for future usage                    */
+    {
+        0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+    },
+
+    .gpio_out_en =                                             /**< [0x483:0x480] (32)  0xabba + GPIO output enable                  */
+    0xffffffff,
+
+    .gpio_in_en =                                              /**< [0x487:0x484] (32)  0xabba + GPIO input enable                   */
+    0xffffffff,
+
+    .gpio_out_type =                                           /**< [0x48b:0x488] (32)  0xabba + GPIO output type                    */
+    0xffffffff,
+
+    .gpio_pup_en =                                             /**< [0x48f:0x48c] (32)  0xabba + GPIO pull-up enable                 */
+    0xffffffff,
+
+    .gpio_pdown_en =                                           /**< [0x493:0x490] (32)  0xabba + GPIO power-down enable              */
+    0xffffffff,
+
+    .gpio_out_value =                                          /**< [0x497:0x494] (32)  0xabba + GPIO output value                   */
+    0xffffffff,
+
+    .gpio_alt_valid =                                          /**< [0x49b:0x498] (32)  GPIO Alt Valid                               */
+    0xffffffff,
+
+    .gpio_alt =                                                /**< [0x4ab:0x49c] (32)  GPIO Alt 0..15                               */
+    {
+        0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff
+    },
+
+    .evbus_handler1_source =                                   /**< [0x4af:0x4ac] (32)  0x00 + custom source of evbus1 irq           */
+    0xffffffff,
+
+    .evbus_handler2_source =                                   /**< [0x4b3:0x4b0] (32)  0x00 + custom source of evbus2 irq           */
+    0xffffffff,
+
+    .evbus_handler3_source =                                   /**< [0x4b7:0x4b4] (32)  0x00 + custom source of evbus3 irq           */
+    0xffffffff,
+
+    .evbus_handler4_source =                                   /**< [0x4bb:0x4b8] (32)  0x00 + custom source of evbus4 irq           */
+    0xffffffff,
+
+    .evbus_handler5_source =                                   /**< [0x4bf:0x4bc] (32)  0x00 + custom source of evbus5 irq           */
+    0xffffffff,
+
+    .evbus_handler6_source =                                   /**< [0x4c3:0x4c0] (32)  0x00 + custom source of evbus6 irq           */
+    0xffffffff,
+
+    .evbus_handler7_source =                                   /**< [0x4c7:0x4c4] (32)  0x00 + custom source of evbus7 irq           */
+    0xffffffff,
+
+    .evbus_handler8_source =                                   /**< [0x4cb:0x4c8] (32)  0x00 + custom source of evbus8 irq           */
+    0xffffffff,
+
+    .hp_irq9_cfg =                                             /**< [0x4cf:0x4cc] (32)  0x00 + irq source of matrix irq              */
+    0xffffffff,
+
+    .hp_irq10_cfg =                                            /**< [0x4d3:0x4d0] (32)  0x00 + irq source of matrix irq              */
+    0xffffffff,
+
+    .hp_irq11_cfg =                                            /**< [0x4d7:0x4d4] (32)  0x00 + irq source of matrix irq              */
+    0xffffffff,
+
+    .hp_irq12_cfg =                                            /**< [0x4db:0x4d8] (32)  0x00 + irq source of matrix irq              */
+    0xffffffff,
+
+    .hp_irq13_cfg =                                            /**< [0x4df:0x4dc] (32)  0x00 + irq source of matrix irq              */
+    0xffffffff,
+
+    .hp_irq14_cfg =                                            /**< [0x4e3:0x4e0] (32)  0x00 + irq source of matrix irq              */
+    0xffffffff,
+
+    .hp_irq9_col_cfg =                                         /**< [0x4e7:0x4e4] (32)  0x00 + column config register                */
+    0xffffffff,
+
+    .hp_irq10_col_cfg =                                        /**< [0x4eb:0x4e8] (32)  0x00 + column config register                */
+    0xffffffff,
+
+    .hp_irq11_col_cfg =                                        /**< [0x4ef:0x4ec] (32)  0x00 + column config register                */
+    0xffffffff,
+
+    .hp_irq12_col_cfg =                                        /**< [0x4f3:0x4f0] (32)  0x00 + column config register                */
+    0xffffffff,
+
+    .hp_irq13_col_cfg =                                        /**< [0x4f7:0x4f4] (32)  0x00 + column config register                */
+    0xffffffff,
+
+    .hp_irq14_col_cfg =                                        /**< [0x4fb:0x4f8] (32)  0x00 + column config register                */
+    0xffffffff,
+
+    .rfu1 =                                                    /**< [0x4ff:0x4fc] (32)  0x00 + column config register                */
+    {
+        0xff, 0xff, 0xff, 0xff
+    },
+
+    .sense_adc_hand_addr =                                     /**< [0x503:0x500] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .timer0_hand_addr =                                        /**< [0x507:0x504] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .timer1_hand_addr =                                        /**< [0x50b:0x508] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .timer2_hand_addr =                                        /**< [0x50f:0x50c] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .timer3_hand_addr =                                        /**< [0x513:0x510] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio_evnt_hand_addr =                                     /**< [0x517:0x514] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio_evnt_gen_hand_addr =                                 /**< [0x51b:0x518] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .timer4_hand_addr =                                        /**< [0x51f:0x51c] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .timer5_hand_addr =                                        /**< [0x523:0x520] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .uart_hand_addr =                                          /**< [0x527:0x524] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .ssp_hand_addr =                                           /**< [0x52b:0x528] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .i2c_hand_addr =                                           /**< [0x52f:0x52c] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio0_hand_addr =                                         /**< [0x533:0x530] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio1_hand_addr =                                         /**< [0x537:0x534] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio2_hand_addr =                                         /**< [0x53b:0x538] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio3_hand_addr =                                         /**< [0x53f:0x53c] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio4_hand_addr =                                         /**< [0x543:0x540] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio5_hand_addr =                                         /**< [0x547:0x544] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio6_hand_addr =                                         /**< [0x54b:0x548] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .gpio7_hand_addr =                                         /**< [0x54f:0x54c] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .aes_hand_addr =                                           /**< [0x553:0x550] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .hard_fault_hand_addr =                                    /**< [0x557:0x554] (32)  absolute address of custom handler           */
+    (param_func_ptr_t)hardfault_handler,
+
+    .systick_hand_addr =                                       /**< [0x55b:0x558] (32)  absolute address of custom handler           */
+    (param_func_ptr_t)example_handler,                         /**  example for a customer owned interrupt service routine in NVM    */
+
+    .wdt_hand_addr =                                           /**< [0x55f:0x55c] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .nvm_hand_addr =                                           /**< [0x563:0x560] (32)  absolute address of custom handler           */
+    0xffffffff,
+
+    .rfu2 =                                                    /**< [0x57b:0x564] (192) reserved for future usage                    */
+    {
+        0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff
+    },
+
+    .tag_type_2_ptr =                                          /**< [0x57f:0x57c] (32)  address of NFC tag information in NVM        */
+    (param_ptr_t)smack_sl_tag,
+
+
+    .nvm_prot_sect =                                           /**< [0x5f7:0x580] (120*8) R/W protection of NVM pages 0..119         */
+    {
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+        nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access, nvm_prot_no_access,
+    },
+
+    .rfu3 =                                                    /**< [0x5ff:0x5f8] (64)  reserved for future usage                    */
+    {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+    },
+
+    .secret =                                                  /**< [0x6ff:0x600] reserved for secret application data               */
+    {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+    },
+
+    .public =                                                  /**< [0x7ff:0x700] reserved for public application data               */
+    {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+    }
+};
+
+
+/* --- End of File ------------------------------------------------ */

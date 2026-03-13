@@ -1,0 +1,7 @@
+device NAC1080
+si SWD
+speed 4000
+r
+h
+loadfile ../../smack_sl/build/image/image_nvm.hex
+exit
